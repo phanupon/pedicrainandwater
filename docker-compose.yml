@@ -1,0 +1,115 @@
+services:
+  # ===== Redis (Message Broker) =====
+  redis:
+    image: redis:7-alpine
+    container_name: floodguard-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== Django Web App (Daphne ASGI) =====
+  web:
+    build:
+      context: ./pedicrainandwater
+      dockerfile: Dockerfile
+    container_name: floodguard-web
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./pedicrainandwater:/app
+      - db-data:/app/db
+      - static-data:/app/staticfiles
+    environment:
+      - DJANGO_SETTINGS_MODULE=flood_project.settings
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-xxxxxxxxxxxxx}
+      - DEBUG=${DEBUG:-False}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost 127.0.0.1 0.0.0.0}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # === Thai API Keys (Optional) ===
+      - TMD_API_UID=${TMD_API_UID:-}
+      - TMD_API_UKEY=${TMD_API_UKEY:-}
+      - GISTDA_API_KEY=${GISTDA_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/predictions/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ===== Celery Worker =====
+  celery-worker:
+    build:
+      context: ./pedicrainandwater
+      dockerfile: Dockerfile
+    container_name: floodguard-worker
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    volumes:
+      - ./pedicrainandwater:/app
+      - db-data:/app/db
+    environment:
+      - DJANGO_SETTINGS_MODULE=flood_project.settings
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-xxxxxxxxxxxxx}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TMD_API_UID=${TMD_API_UID:-}
+      - TMD_API_UKEY=${TMD_API_UKEY:-}
+      - GISTDA_API_KEY=${GISTDA_API_KEY:-}
+    command: celery -A flood_project worker --loglevel=info --concurrency=4 --queues=default
+
+  # ===== Celery Beat (Scheduler) =====
+  celery-beat:
+    build:
+      context: ./pedicrainandwater
+      dockerfile: Dockerfile
+    container_name: floodguard-beat
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    volumes:
+      - ./pedicrainandwater:/app
+      - db-data:/app/db
+    environment:
+      - DJANGO_SETTINGS_MODULE=flood_project.settings
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-xxxxxxxxxxxxx}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    command: celery -A flood_project beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+volumes:
+  redis-data:
+    driver: local
+  db-data:
+    driver: local
+  static-data:
+    driver: local
+
+networks:
+  default:
+    name: floodguard-network

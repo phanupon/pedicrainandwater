@@ -1,0 +1,227 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ province.name_th }} - FloodGuard Thailand</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="{% static 'flood_alert/css/main.css' %}">
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <a href="{% url 'flood_alert:dashboard' %}" class="logo">
+                <span class="logo-icon">🌊</span>
+                <div>
+                    <span class="logo-text">FloodGuard</span>
+                    <span class="logo-sub">Thailand</span>
+                </div>
+            </a>
+            <nav class="nav">
+                <a href="{% url 'flood_alert:dashboard' %}" class="nav-link">← กลับหน้าหลัก</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Province Hero -->
+        <section class="province-hero" style="border-color: {{ risk_color }};">
+            <div class="province-hero-left">
+                <div class="province-hero-name">{{ province.name_th }}</div>
+                <div class="province-hero-en">{{ province.name_en }} | {{ province.region }}</div>
+                <div class="province-coords">
+                    📍 {{ province.latitude|floatformat:4 }}°N, {{ province.longitude|floatformat:4 }}°E
+                </div>
+            </div>
+            {% if latest_pred %}
+            <div class="province-hero-risk" style="background: {{ risk_color }};">
+                <div class="hero-risk-label">{{ latest_pred.get_risk_level_display }}</div>
+                <div class="hero-prob">{{ latest_pred.flood_probability }}%</div>
+                <div class="hero-prob-label">ความน่าจะเป็นน้ำท่วม</div>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- Score Breakdown -->
+        {% if latest_pred %}
+        <section class="score-section">
+            <h2 class="section-title">📊 ปัจจัยการทำนาย</h2>
+            <div class="scores-grid">
+                <div class="score-card">
+                    <div class="score-icon">🌧️</div>
+                    <div class="score-label">คะแนนฝน</div>
+                    <div class="score-bar-wrap">
+                        <div class="score-bar" style="width: {{ latest_pred.score_rain }}%; background: #3b82f6;"></div>
+                    </div>
+                    <div class="score-value">{{ latest_pred.score_rain|floatformat:1 }}/100</div>
+                </div>
+                <div class="score-card">
+                    <div class="score-icon">🏞️</div>
+                    <div class="score-label">คะแนนอ่างเก็บน้ำ</div>
+                    <div class="score-bar-wrap">
+                        <div class="score-bar" style="width: {{ latest_pred.score_dam }}%; background: #8b5cf6;"></div>
+                    </div>
+                    <div class="score-value">{{ latest_pred.score_dam|floatformat:1 }}/100</div>
+                </div>
+                <div class="score-card">
+                    <div class="score-icon">📅</div>
+                    <div class="score-label">คะแนนฤดูกาล</div>
+                    <div class="score-bar-wrap">
+                        <div class="score-bar" style="width: {{ latest_pred.score_history }}%; background: #f59e0b;"></div>
+                    </div>
+                    <div class="score-value">{{ latest_pred.score_history|floatformat:1 }}/100</div>
+                </div>
+            </div>
+            {% if latest_pred.notes %}
+            <div class="pred-notes">💡 {{ latest_pred.notes }}</div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        <!-- Rainfall Chart -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">🌧️ พยากรณ์ฝน 48 ชั่วโมง</h2>
+                <span class="data-source">แหล่งข้อมูล: Open-Meteo</span>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="rainChart"></canvas>
+            </div>
+        </section>
+
+        <div class="content-grid">
+            <!-- Forecast Table -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">📋 ตารางพยากรณ์</h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>เวลา</th>
+                                <th>ฝน (มม.)</th>
+                                <th>อุณหภูมิ</th>
+                                <th>ความชื้น</th>
+                                <th>ลม</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in forecasts %}
+                            <tr class="{% if f.precipitation_mm >= 35 %}row-critical{% elif f.precipitation_mm >= 15 %}row-warning{% endif %}">
+                                <td>{{ f.forecast_time|date:"d/m H:i" }}</td>
+                                <td class="rain-cell">
+                                    <span class="rain-bar" style="width: {{ f.precipitation_mm|floatformat:0 }}px; max-width: 80px;"></span>
+                                    {{ f.precipitation_mm|floatformat:1 }}
+                                </td>
+                                <td>{% if f.temperature_c %}{{ f.temperature_c|floatformat:1 }}°C{% else %}-{% endif %}</td>
+                                <td>{% if f.humidity_pct %}{{ f.humidity_pct|floatformat:0 }}%{% else %}-{% endif %}</td>
+                                <td>{% if f.wind_speed_kmh %}{{ f.wind_speed_kmh|floatformat:1 }} กม./ชม.{% else %}-{% endif %}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="empty-cell">ยังไม่มีข้อมูลพยากรณ์</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Alert History -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">🔔 ประวัติแจ้งเตือน</h2>
+                </div>
+                <div class="alerts-list">
+                    {% for alert in alerts %}
+                    <div class="alert-item alert-{{ alert.alert_type|lower }}">
+                        <div class="alert-icon">
+                            {% if alert.alert_type == 'FLOOD_CRITICAL' %}🚨
+                            {% elif alert.alert_type == 'FLOOD_RISK' %}⚠️
+                            {% else %}🌧️{% endif %}
+                        </div>
+                        <div class="alert-body">
+                            <div class="alert-title">{{ alert.title }}</div>
+                            <div class="alert-time">{{ alert.created_at|date:"d/m/Y H:i" }}</div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <div class="empty-icon">✅</div>
+                        <p>ไม่มีประวัติการแจ้งเตือน</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+    const chartTimes = {{ chart_times|safe }};
+    const chartRain = {{ chart_rain|safe }};
+    const chartHumidity = {{ chart_humidity|safe }};
+
+    const ctx = document.getElementById('rainChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: chartTimes,
+            datasets: [
+                {
+                    label: 'ปริมาณฝน (มม./ชม.)',
+                    data: chartRain,
+                    backgroundColor: chartRain.map(v =>
+                        v >= 60 ? '#7c3aed' :
+                        v >= 35 ? '#ef4444' :
+                        v >= 15 ? '#f97316' :
+                        v >= 5  ? '#eab308' : '#3b82f6'
+                    ),
+                    borderRadius: 4,
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'ความชื้นสัมพัทธ์ (%)',
+                    data: chartHumidity,
+                    type: 'line',
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4,
+                    yAxisID: 'y1',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#cbd5e1', font: { family: 'Noto Sans Thai' } } },
+                tooltip: { mode: 'index' }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#94a3b8', maxRotation: 45, font: { size: 10 } },
+                    grid: { color: '#1e293b' }
+                },
+                y: {
+                    position: 'left',
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: '#1e293b' },
+                    title: { display: true, text: 'ฝน (มม.)', color: '#94a3b8' }
+                },
+                y1: {
+                    position: 'right',
+                    min: 0, max: 100,
+                    ticks: { color: '#06b6d4' },
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'ความชื้น (%)', color: '#06b6d4' }
+                }
+            }
+        }
+    });
+    </script>
+</body>
+</html>

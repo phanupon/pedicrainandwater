@@ -1,0 +1,166 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สถานะระบบ - FloodGuard Thailand</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'flood_alert/css/main.css' %}">
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <a href="{% url 'flood_alert:dashboard' %}" class="logo">
+                <span class="logo-icon">🌊</span>
+                <div>
+                    <span class="logo-text">FloodGuard</span>
+                    <span class="logo-sub">Thailand</span>
+                </div>
+            </a>
+            <nav class="nav">
+                <a href="{% url 'flood_alert:dashboard' %}" class="nav-link">← แผงควบคุม</a>
+                <a href="{% url 'flood_alert:system_status' %}" class="nav-link active">สถานะระบบ</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <h1 class="page-title">⚙️ สถานะระบบ FloodGuard</h1>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card stat-safe">
+                <div class="stat-icon">🌤️</div>
+                <div class="stat-value">{{ stats.weather }}</div>
+                <div class="stat-label">ข้อมูลพยากรณ์</div>
+            </div>
+            <div class="stat-card stat-low">
+                <div class="stat-icon">🏞️</div>
+                <div class="stat-value">{{ stats.dams }}</div>
+                <div class="stat-label">ข้อมูลเขื่อน</div>
+            </div>
+            <div class="stat-card stat-moderate">
+                <div class="stat-icon">📊</div>
+                <div class="stat-value">{{ stats.predictions }}</div>
+                <div class="stat-label">ผลการทำนาย</div>
+            </div>
+            <div class="stat-card stat-high">
+                <div class="stat-icon">🔔</div>
+                <div class="stat-value">{{ stats.alerts }}</div>
+                <div class="stat-label">การแจ้งเตือน</div>
+            </div>
+        </div>
+
+        <!-- Data Sources Status -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">📡 แหล่งข้อมูล API</h2>
+            </div>
+            <div class="api-sources-grid">
+                <div class="api-source-card api-active">
+                    <div class="api-logo">🌍</div>
+                    <div class="api-name">Open-Meteo</div>
+                    <div class="api-desc">พยากรณ์ฝนรายชั่วโมง (ฟรี)</div>
+                    <div class="api-status">✅ พร้อมใช้งาน</div>
+                    <code class="api-endpoint">api.open-meteo.com/v1/forecast</code>
+                </div>
+                <div class="api-source-card api-active">
+                    <div class="api-logo">🏞️</div>
+                    <div class="api-name">กรมชลประทาน (RID)</div>
+                    <div class="api-desc">ข้อมูลอ่างเก็บน้ำ (Public)</div>
+                    <div class="api-status">✅ พร้อมใช้งาน</div>
+                    <code class="api-endpoint">app.rid.go.th/reservoir/api/dam</code>
+                </div>
+                <div class="api-source-card api-key-required">
+                    <div class="api-logo">🛰️</div>
+                    <div class="api-name">GISTDA</div>
+                    <div class="api-desc">พื้นที่น้ำท่วมจากดาวเทียม</div>
+                    <div class="api-status">🔑 ต้องมี API Key</div>
+                    <code class="api-endpoint">api-gateway.gistda.or.th/v2</code>
+                </div>
+                <div class="api-source-card api-key-required">
+                    <div class="api-logo">☁️</div>
+                    <div class="api-name">กรมอุตุนิยมวิทยา (TMD)</div>
+                    <div class="api-desc">พยากรณ์อากาศทางการ</div>
+                    <div class="api-status">🔑 ต้องมี uid/ukey</div>
+                    <code class="api-endpoint">data.tmd.go.th/api</code>
+                </div>
+            </div>
+        </section>
+
+        <!-- Fetch Logs Table -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">📜 ประวัติการดึงข้อมูล</h2>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>แหล่งข้อมูล</th>
+                            <th>สถานะ</th>
+                            <th>จำนวนรายการ</th>
+                            <th>ระยะเวลา (ms)</th>
+                            <th>เวลา</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in fetch_logs %}
+                        <tr class="{% if log.status == 'error' %}row-critical{% elif log.status == 'partial' %}row-warning{% endif %}">
+                            <td>{{ log.get_source_display }}</td>
+                            <td>{{ log.get_status_display }}</td>
+                            <td>{{ log.records_fetched }}</td>
+                            <td>{{ log.duration_ms }}</td>
+                            <td>{{ log.fetched_at|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="empty-cell">ยังไม่มีประวัติการดึงข้อมูล</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Architecture Info -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">🏗️ สถาปัตยกรรมระบบ</h2>
+            </div>
+            <div class="arch-grid">
+                <div class="arch-card">
+                    <div class="arch-icon">🐳</div>
+                    <div class="arch-name">Docker Compose</div>
+                    <div class="arch-desc">Container orchestration</div>
+                </div>
+                <div class="arch-card">
+                    <div class="arch-icon">🐍</div>
+                    <div class="arch-name">Django 4.2</div>
+                    <div class="arch-desc">Web framework</div>
+                </div>
+                <div class="arch-card">
+                    <div class="arch-icon">⚡</div>
+                    <div class="arch-name">Celery + Beat</div>
+                    <div class="arch-desc">Task scheduler</div>
+                </div>
+                <div class="arch-card">
+                    <div class="arch-icon">🔴</div>
+                    <div class="arch-name">Redis</div>
+                    <div class="arch-desc">Message broker + cache</div>
+                </div>
+                <div class="arch-card">
+                    <div class="arch-icon">🗄️</div>
+                    <div class="arch-name">SQLite</div>
+                    <div class="arch-desc">Lightweight database</div>
+                </div>
+                <div class="arch-card">
+                    <div class="arch-icon">🔌</div>
+                    <div class="arch-name">WebSocket</div>
+                    <div class="arch-desc">Real-time alerts (Daphne)</div>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

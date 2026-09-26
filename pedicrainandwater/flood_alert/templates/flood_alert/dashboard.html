@@ -1,0 +1,166 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌊 FloodGuard Thailand - ระบบทำนายและแจ้งเตือนน้ำท่วม</title>
+    <meta name="description" content="ระบบทำนายและแจ้งเตือนน้ำท่วม ฝนตกหนัก สำหรับประเทศไทย ใช้ข้อมูลจาก Open-Meteo, กรมชลประทาน, GISTDA">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="{% static 'flood_alert/css/main.css' %}">
+</head>
+<body>
+    <!-- Animated background particles -->
+    <div class="bg-particles" id="particles"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">🌊</span>
+                <div>
+                    <span class="logo-text">FloodGuard</span>
+                    <span class="logo-sub">Thailand</span>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="{% url 'flood_alert:dashboard' %}" class="nav-link active">แผงควบคุม</a>
+                <a href="{% url 'flood_alert:system_status' %}" class="nav-link">สถานะระบบ</a>
+                <a href="/admin/" class="nav-link">Admin</a>
+            </nav>
+            <div class="status-badge" id="ws-status">
+                <span class="status-dot"></span>
+                <span>เชื่อมต่อ</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Hero Stats -->
+        <section class="stats-grid">
+            <div class="stat-card stat-safe">
+                <div class="stat-icon">🟢</div>
+                <div class="stat-value">{{ risk_counts.SAFE }}</div>
+                <div class="stat-label">ปลอดภัย</div>
+            </div>
+            <div class="stat-card stat-low">
+                <div class="stat-icon">🟡</div>
+                <div class="stat-value">{{ risk_counts.LOW }}</div>
+                <div class="stat-label">เฝ้าระวัง</div>
+            </div>
+            <div class="stat-card stat-moderate">
+                <div class="stat-icon">🟠</div>
+                <div class="stat-value">{{ risk_counts.MODERATE }}</div>
+                <div class="stat-label">เสี่ยงปานกลาง</div>
+            </div>
+            <div class="stat-card stat-high">
+                <div class="stat-icon">🔴</div>
+                <div class="stat-value">{{ risk_counts.HIGH }}</div>
+                <div class="stat-label">เสี่ยงสูง</div>
+            </div>
+            <div class="stat-card stat-critical">
+                <div class="stat-icon">🚨</div>
+                <div class="stat-value">{{ risk_counts.CRITICAL }}</div>
+                <div class="stat-label">วิกฤต</div>
+            </div>
+            <div class="stat-card stat-total">
+                <div class="stat-icon">🗺️</div>
+                <div class="stat-value">{{ total_provinces }}</div>
+                <div class="stat-label">จังหวัดทั้งหมด</div>
+            </div>
+        </section>
+
+        <div class="content-grid">
+            <!-- Active Alerts Panel -->
+            <section class="panel panel-alerts">
+                <div class="panel-header">
+                    <h2 class="panel-title">
+                        <span>⚡</span> การแจ้งเตือนล่าสุด
+                    </h2>
+                    <span class="badge badge-live">LIVE</span>
+                </div>
+                <div class="alerts-list" id="alerts-container">
+                    {% if active_alerts %}
+                        {% for alert in active_alerts %}
+                        <div class="alert-item alert-{{ alert.alert_type|lower }}" data-id="{{ alert.id }}">
+                            <div class="alert-icon">
+                                {% if alert.alert_type == 'FLOOD_CRITICAL' %}🚨
+                                {% elif alert.alert_type == 'FLOOD_RISK' %}⚠️
+                                {% elif alert.alert_type == 'HEAVY_RAIN' %}🌧️
+                                {% elif alert.alert_type == 'DAM_FULL' %}🏞️
+                                {% else %}⚠️{% endif %}
+                            </div>
+                            <div class="alert-body">
+                                <div class="alert-title">{{ alert.title }}</div>
+                                <div class="alert-province">📍 {{ alert.province.name_th }}</div>
+                                <div class="alert-time">🕐 {{ alert.created_at|date:"d/m/Y H:i" }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-icon">✅</div>
+                            <p>ไม่มีการแจ้งเตือนในขณะนี้</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <!-- Province Risk Map -->
+            <section class="panel panel-provinces">
+                <div class="panel-header">
+                    <h2 class="panel-title">
+                        <span>🗺️</span> ความเสี่ยงรายจังหวัด
+                    </h2>
+                    <div class="filter-btns" id="region-filter">
+                        <button class="filter-btn active" data-region="all">ทั้งหมด</button>
+                        <button class="filter-btn" data-region="ภาคเหนือ">เหนือ</button>
+                        <button class="filter-btn" data-region="ภาคอีสาน">อีสาน</button>
+                        <button class="filter-btn" data-region="ภาคกลาง">กลาง</button>
+                        <button class="filter-btn" data-region="ภาคใต้">ใต้</button>
+                    </div>
+                </div>
+                <div class="provinces-grid" id="provinces-grid">
+                    {% for item in latest_preds %}
+                    <a href="{% url 'flood_alert:province_detail' item.province.id %}"
+                       class="province-card province-{{ item.prediction.risk_level|lower }}"
+                       data-region="{{ item.province.region }}"
+                       title="{{ item.province.name_th }}">
+                        <div class="province-risk-bar" style="background: {{ item.color }};"></div>
+                        <div class="province-name">{{ item.province.name_th }}</div>
+                        <div class="province-prob">{{ item.prediction.flood_probability }}%</div>
+                        <div class="province-rain">🌧️ {{ item.prediction.expected_rain_mm|floatformat:1 }} มม.</div>
+                        <div class="province-risk-badge" style="background: {{ item.color }};">
+                            {{ item.prediction.get_risk_level_display }}
+                        </div>
+                    </a>
+                    {% empty %}
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-icon">📊</div>
+                        <p>ยังไม่มีข้อมูลการทำนาย<br>กรุณารอระบบประมวลผล</p>
+                        <small>ข้อมูลจะอัปเดตอัตโนมัติทุก 30 นาที</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+        </div>
+
+        <!-- System Info Bar -->
+        <div class="info-bar">
+            <span>📡 อัปเดตล่าสุด: <strong>{{ now|date:"d/m/Y H:i:s" }}</strong></span>
+            {% if last_fetch %}
+            <span>🔄 ดึงข้อมูลล่าสุด: <strong>{{ last_fetch.fetched_at|date:"H:i น." }}</strong>
+                ({{ last_fetch.records_fetched }} รายการ)</span>
+            {% endif %}
+            <span>⚙️ แหล่งข้อมูล: Open-Meteo | กรมชลประทาน | GISTDA</span>
+        </div>
+    </main>
+
+    <!-- Real-time Alert Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="{% static 'flood_alert/js/dashboard.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Git ignore for FloodGuard Thailand
+.env
+*.pyc
+__pycache__/
+*.pyo
+.DS_Store
+db/*.db
+staticfiles/
+*.sqlite3
+.venv/
+venv/
+node_modules/
+*.log
+.idea/
+.vscode/
+*.swp
