@@ -41,8 +41,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       # === Thai API Keys (Optional) ===
-      - TMD_API_UID=${TMD_API_UID:-}
-      - TMD_API_UKEY=${TMD_API_UKEY:-}
+      - TMD_TOKEN=${TMD_TOKEN:-}
       - GISTDA_API_KEY=${GISTDA_API_KEY:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/predictions/"]

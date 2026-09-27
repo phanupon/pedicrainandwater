@@ -73,19 +73,27 @@
                     <div class="api-status">✅ พร้อมใช้งาน</div>
                     <code class="api-endpoint">app.rid.go.th/reservoir/api/dam</code>
                 </div>
-                <div class="api-source-card api-key-required">
+                <div class="api-source-card {% if api_status.gistda_configured %}api-active{% else %}api-key-required{% endif %}">
                     <div class="api-logo">🛰️</div>
                     <div class="api-name">GISTDA</div>
                     <div class="api-desc">พื้นที่น้ำท่วมจากดาวเทียม</div>
-                    <div class="api-status">🔑 ต้องมี API Key</div>
+                    {% if api_status.gistda_configured %}
+                    <div class="api-status">✅ พร้อมใช้งาน (Key ตั้งค่าแล้ว)</div>
+                    {% else %}
+                    <div class="api-status">🔑 ยังไม่ได้ตั้งค่า GISTDA_API_KEY</div>
+                    {% endif %}
                     <code class="api-endpoint">api-gateway.gistda.or.th/v2</code>
                 </div>
-                <div class="api-source-card api-key-required">
+                <div class="api-source-card {% if api_status.tmd_configured %}api-active{% else %}api-key-required{% endif %}">
                     <div class="api-logo">☁️</div>
-                    <div class="api-name">กรมอุตุนิยมวิทยา (TMD)</div>
-                    <div class="api-desc">พยากรณ์อากาศทางการ</div>
-                    <div class="api-status">🔑 ต้องมี uid/ukey</div>
-                    <code class="api-endpoint">data.tmd.go.th/api</code>
+                    <div class="api-name">กรมอุตุนิยมวิทยา (TMD NWP)</div>
+                    <div class="api-desc">พยากรณ์อากาศจากคอมพิวเตอร์สมรรถนะสูง<br><small>ใช้ OAuth Bearer Token</small></div>
+                    {% if api_status.tmd_configured %}
+                    <div class="api-status">✅ พร้อมใช้งาน (Token ตั้งค่าแล้ว)</div>
+                    {% else %}
+                    <div class="api-status">🔑 ยังไม่ได้ตั้งค่า TMD_TOKEN</div>
+                    {% endif %}
+                    <code class="api-endpoint">data.tmd.go.th/nwpapi/v1/forecast</code>
                 </div>
             </div>
         </section>

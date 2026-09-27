@@ -69,53 +69,54 @@ def fetch_rid_dam_data():
     """
     data = _get(settings.RID_DAM_API)
 
-    # RID API may return list directly or nested
-    if isinstance(data, list):
-        dams = data
-    elif isinstance(data, dict):
-        dams = data.get('dams', data.get('data', data.get('result', [])))
-    else:
-        dams = []
+    # API returns: {"data": [{"region": "...", "dam": [...]}, ...]}
+    regions = data.get('data', [])
+    if not isinstance(regions, list):
+        regions = []
 
     results = []
-    for dam in dams:
-        # Normalize various field name conventions the API may use
-        results.append({
-            'rid_code': str(dam.get('id', dam.get('dam_id', dam.get('code', '')))),
-            'dam_name': dam.get('name', dam.get('dam_name', dam.get('dam_name_th', ''))),
-            'capacity_mcm': _to_float(dam.get('max_storage', dam.get('capacity', dam.get('max_storage_mcm')))),
-            'volume_mcm': _to_float(dam.get('dam_storage', dam.get('storage', dam.get('current_storage')))),
-            'storage_percent': _to_float(dam.get('dam_storage_percent', dam.get('percent', dam.get('storage_percent')))),
-            'inflow_cms': _to_float(dam.get('inflow', dam.get('inflow_rate', dam.get('inflow_cms')))),
-            'outflow_cms': _to_float(dam.get('released', dam.get('outflow', dam.get('outflow_cms')))),
-        })
+    for region_data in regions:
+        dams_list = region_data.get('dam', [])
+        for dam in dams_list:
+            results.append({
+                'rid_code': str(dam.get('id', '')),
+                'dam_name': dam.get('name', ''),
+                'capacity_mcm': _to_float(dam.get('capacity')),
+                'volume_mcm': _to_float(dam.get('volume')),
+                'storage_percent': _to_float(dam.get('percent_storage')),
+                'inflow_cms': _to_float(dam.get('inflow')),
+                'outflow_cms': _to_float(dam.get('outflow')),
+            })
     return results
 
 
 def fetch_tmd_weather(province):
     """
-    ดึงข้อมูลจากกรมอุตุนิยมวิทยา (ต้องมี uid/ukey)
-    Falls back to empty list if not configured.
+    ดึงข้อมูลพยากรณ์อากาศจากกรมอุตุนิยมวิทยา NWP API
+    ใช้ OAuth Bearer Token ใน Authorization Header
+    Docs: http://data.tmd.go.th/nwpapi/doc
     """
-    uid = settings.TMD_API_UID
-    ukey = settings.TMD_API_UKEY
-
-    if not uid or not ukey:
-        logger.warning('TMD API credentials not configured, skipping.')
+    token = settings.TMD_TOKEN
+    if not token:
+        logger.warning('TMD_TOKEN not configured, skipping TMD fetch.')
         return []
 
-    params = {
-        'uid': uid,
-        'ukey': ukey,
-        'province': province.name_en,
-        'format': 'json',
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Accept': 'application/json',
     }
+    params = {
+        'lat': province.latitude,
+        'lon': province.longitude,
+        'fields': 'tc,rh,rain,ws10m,wd10m,psfc',  # อุณหภูมิ,ความชื้น,ฝน,ลม
+        'duration': 24,  # 24 ชั่วโมง
+    }
+
     try:
-        data = _get(settings.TMD_API_BASE, params=params)
-        # Parse TMD response format
-        return _parse_tmd_response(data, province)
+        data = _get(settings.TMD_NWP_API_BASE, params=params, headers=headers)
+        return _parse_tmd_nwp_response(data)
     except Exception as e:
-        logger.warning(f'TMD fetch failed for {province}: {e}')
+        logger.warning(f'TMD NWP fetch failed for {province}: {e}')
         return []
 
 
@@ -156,19 +157,53 @@ def _to_float(val):
         return None
 
 
-def _parse_tmd_response(data, province):
-    """Parse TMD API response into standardized format."""
+def _parse_tmd_nwp_response(data: dict) -> list:
+    """
+    แปลง JSON จาก TMD NWP API เป็น list รูปแบบมาตรฐาน
+
+    TMD NWP API Response format:
+    {
+      "fcst_datetime": [...],
+      "tc": [...],      # อุณหภูมิ (°C)
+      "rh": [...],      # ความชื้นสัมพัทธ์ (%)
+      "rain": [...],    # ฝนสะสม (mm)
+      "ws10m": [...],   # ความเร็วลม (m/s)
+    }
+    """
     results = []
-    # TMD may return nested structure - handle common patterns
-    forecasts = data.get('WeatherForecast', data.get('forecasts', data.get('data', [])))
-    if isinstance(forecasts, dict):
-        forecasts = [forecasts]
-    for f in forecasts[:24]:  # Max 24 hours
-        results.append({
-            'forecast_time': f.get('time', f.get('datetime', '')),
-            'precipitation_mm': _to_float(f.get('rainfall', f.get('rain', 0))) or 0.0,
-            'temperature_c': _to_float(f.get('temp', f.get('temperature'))),
-            'humidity_pct': _to_float(f.get('humidity', f.get('rh'))),
-            'source': 'tmd',
-        })
+
+    # Handle both possible response structures
+    forecast = data.get('WeatherForecast', data.get('data', data))
+    if isinstance(forecast, dict):
+        # Flat array format
+        times = forecast.get('fcst_datetime', [])
+        rain = forecast.get('rain', [])
+        tc = forecast.get('tc', [])
+        rh = forecast.get('rh', [])
+        ws = forecast.get('ws10m', [])
+
+        for i, t in enumerate(times):
+            ws_ms = _to_float(ws[i] if i < len(ws) else None)
+            results.append({
+                'forecast_time': t,
+                'precipitation_mm': _to_float(rain[i] if i < len(rain) else 0) or 0.0,
+                'temperature_c': _to_float(tc[i] if i < len(tc) else None),
+                'humidity_pct': _to_float(rh[i] if i < len(rh) else None),
+                'wind_speed_kmh': round(ws_ms * 3.6, 1) if ws_ms else None,  # m/s → km/h
+                'source': 'tmd',
+            })
+    elif isinstance(forecast, list):
+        # List of objects format
+        for item in forecast:
+            ws_ms = _to_float(item.get('ws10m'))
+            results.append({
+                'forecast_time': item.get('fcst_datetime', item.get('time', '')),
+                'precipitation_mm': _to_float(item.get('rain', 0)) or 0.0,
+                'temperature_c': _to_float(item.get('tc')),
+                'humidity_pct': _to_float(item.get('rh')),
+                'wind_speed_kmh': round(ws_ms * 3.6, 1) if ws_ms else None,
+                'source': 'tmd',
+            })
+
+    logger.debug(f'TMD NWP parsed {len(results)} hourly records')
     return results

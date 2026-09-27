@@ -368,6 +368,69 @@ body {
 .alert-province { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 .alert-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-en); }
 
+/* ===== Dams List ===== */
+.dams-list {
+    padding: 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.dam-item {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.dam-item:last-child {
+    border-bottom: none;
+}
+
+.dam-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.dam-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.dam-percent {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.dam-critical { color: var(--critical); }
+.dam-warning { color: var(--moderate); }
+.dam-safe { color: var(--safe); }
+
+.bg-critical { background: var(--critical) !important; }
+.bg-warning { background: var(--moderate) !important; }
+.bg-safe { background: var(--safe) !important; }
+
+.dam-progress {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.dam-progress-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.dam-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
 /* ===== Province Cards ===== */
 .filter-btns {
     display: flex;

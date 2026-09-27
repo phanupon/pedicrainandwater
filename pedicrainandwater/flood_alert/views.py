@@ -52,6 +52,19 @@ def dashboard(request):
     for item in latest_preds:
         risk_counts[item['prediction'].risk_level] += 1
 
+    # Critical Dams (Top 6 most full)
+    recent_dams = DamData.objects.filter(
+        timestamp__gte=now - timedelta(hours=24)
+    ).order_by('-storage_percent', '-timestamp')
+    
+    seen_dams = set()
+    critical_dams = []
+    for d in recent_dams:
+        if d.rid_code not in seen_dams:
+            seen_dams.add(d.rid_code)
+            critical_dams.append(d)
+    critical_dams = critical_dams[:6]
+
     # System status
     last_fetch = DataFetchLog.objects.order_by('-fetched_at').first()
 
@@ -59,6 +72,7 @@ def dashboard(request):
         'latest_preds': latest_preds,
         'active_alerts': active_alerts,
         'risk_counts': risk_counts,
+        'critical_dams': critical_dams,
         'total_provinces': provinces.count(),
         'last_fetch': last_fetch,
         'now': now,
@@ -201,11 +215,19 @@ def api_dam_status(request):
 
 def system_status(request):
     """หน้าแสดงสถานะระบบ"""
+    from django.conf import settings as django_settings
+
     fetch_logs = DataFetchLog.objects.order_by('-fetched_at')[:50]
     total_weather = WeatherData.objects.count()
     total_dams = DamData.objects.values('rid_code').distinct().count()
     total_predictions = FloodPrediction.objects.count()
     total_alerts = Alert.objects.count()
+
+    # ตรวจสอบว่า API key ถูกตั้งค่าจริงหรือไม่
+    api_status = {
+        'tmd_configured': bool(getattr(django_settings, 'TMD_TOKEN', '')),
+        'gistda_configured': bool(getattr(django_settings, 'GISTDA_API_KEY', '')),
+    }
 
     context = {
         'fetch_logs': fetch_logs,
@@ -214,6 +236,7 @@ def system_status(request):
             'dams': total_dams,
             'predictions': total_predictions,
             'alerts': total_alerts,
-        }
+        },
+        'api_status': api_status,
     }
     return render(request, 'flood_alert/system_status.html', context)

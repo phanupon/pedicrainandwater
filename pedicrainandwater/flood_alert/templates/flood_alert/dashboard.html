@@ -73,40 +73,77 @@
         </section>
 
         <div class="content-grid">
-            <!-- Active Alerts Panel -->
-            <section class="panel panel-alerts">
-                <div class="panel-header">
-                    <h2 class="panel-title">
-                        <span>⚡</span> การแจ้งเตือนล่าสุด
-                    </h2>
-                    <span class="badge badge-live">LIVE</span>
-                </div>
-                <div class="alerts-list" id="alerts-container">
-                    {% if active_alerts %}
-                        {% for alert in active_alerts %}
-                        <div class="alert-item alert-{{ alert.alert_type|lower }}" data-id="{{ alert.id }}">
-                            <div class="alert-icon">
-                                {% if alert.alert_type == 'FLOOD_CRITICAL' %}🚨
-                                {% elif alert.alert_type == 'FLOOD_RISK' %}⚠️
-                                {% elif alert.alert_type == 'HEAVY_RAIN' %}🌧️
-                                {% elif alert.alert_type == 'DAM_FULL' %}🏞️
-                                {% else %}⚠️{% endif %}
+            <!-- Left Column -->
+            <div class="left-col" style="display: flex; flex-direction: column; gap: 24px;">
+                <!-- Active Alerts Panel -->
+                <section class="panel panel-alerts" style="flex: 1;">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            <span>⚡</span> การแจ้งเตือนล่าสุด
+                        </h2>
+                        <span class="badge badge-live">LIVE</span>
+                    </div>
+                    <div class="alerts-list" id="alerts-container">
+                        {% if active_alerts %}
+                            {% for alert in active_alerts %}
+                            <div class="alert-item alert-{{ alert.alert_type|lower }}" data-id="{{ alert.id }}">
+                                <div class="alert-icon">
+                                    {% if alert.alert_type == 'FLOOD_CRITICAL' %}🚨
+                                    {% elif alert.alert_type == 'FLOOD_RISK' %}⚠️
+                                    {% elif alert.alert_type == 'HEAVY_RAIN' %}🌧️
+                                    {% elif alert.alert_type == 'DAM_FULL' %}🏞️
+                                    {% else %}⚠️{% endif %}
+                                </div>
+                                <div class="alert-body">
+                                    <div class="alert-title">{{ alert.title }}</div>
+                                    <div class="alert-province">📍 {{ alert.province.name_th }}</div>
+                                    <div class="alert-time">🕐 {{ alert.created_at|date:"d/m/Y H:i" }}</div>
+                                </div>
                             </div>
-                            <div class="alert-body">
-                                <div class="alert-title">{{ alert.title }}</div>
-                                <div class="alert-province">📍 {{ alert.province.name_th }}</div>
-                                <div class="alert-time">🕐 {{ alert.created_at|date:"d/m/Y H:i" }}</div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <div class="empty-icon">✅</div>
+                                <p>ไม่มีการแจ้งเตือนในขณะนี้</p>
                             </div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <!-- Dams Status Panel -->
+                <section class="panel panel-dams">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            <span>🏞️</span> อ่างเก็บน้ำเฝ้าระวัง
+                        </h2>
+                    </div>
+                    <div class="dams-list">
+                        {% for dam in critical_dams %}
+                        <div class="dam-item">
+                            <div class="dam-header">
+                                <div class="dam-name">{{ dam.dam_name }}</div>
+                                <div class="dam-percent {% if dam.storage_percent >= 90 %}dam-critical{% elif dam.storage_percent >= 75 %}dam-warning{% else %}dam-safe{% endif %}">
+                                    {{ dam.storage_percent|floatformat:1 }}%
+                                </div>
+                            </div>
+                            <div class="dam-progress">
+                                <div class="dam-progress-bar {% if dam.storage_percent >= 90 %}bg-critical{% elif dam.storage_percent >= 75 %}bg-warning{% else %}bg-safe{% endif %}" style="width: {{ dam.storage_percent }}%;"></div>
+                            </div>
+                            <div class="dam-details">
+                                <span>ปริมาตร: {{ dam.volume_mcm|floatformat:1 }} ลบ.ม.</span>
+                                <span>ไหลลง: {{ dam.inflow_cms|floatformat:1 }}</span>
+                                <span>ระบาย: {{ dam.outflow_cms|floatformat:1 }}</span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="empty-state">
+                            <div class="empty-icon">ℹ️</div>
+                            <p>ไม่มีข้อมูลอ่างเก็บน้ำ</p>
                         </div>
                         {% endfor %}
-                    {% else %}
-                        <div class="empty-state">
-                            <div class="empty-icon">✅</div>
-                            <p>ไม่มีการแจ้งเตือนในขณะนี้</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </section>
+                    </div>
+                </section>
+            </div>
 
             <!-- Province Risk Map -->
             <section class="panel panel-provinces">

@@ -108,10 +108,9 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ===== API Keys =====
-# กรมอุตุนิยมวิทยา (TMD)
-TMD_API_UID = os.environ.get('TMD_API_UID', '')
-TMD_API_UKEY = os.environ.get('TMD_API_UKEY', '')
-TMD_API_BASE = 'https://data.tmd.go.th/api/WeatherToday/V1/'
+# กรมอุตุนิยมวิทยา (TMD) NWP API - OAuth Bearer Token
+TMD_TOKEN = os.environ.get('TMD_TOKEN', '')
+TMD_NWP_API_BASE = 'https://data.tmd.go.th/nwpapi/v1/forecast/location/hourly'
 
 # GISTDA Flood API
 GISTDA_API_KEY = os.environ.get('GISTDA_API_KEY', '')
