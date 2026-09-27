@@ -365,3 +365,79 @@ def bkk_roads(request):
         'flooded_roads': flooded_roads,
     }
     return render(request, 'flood_alert/bkk_roads.html', context)
+
+
+def monitoring_map(request):
+    """หน้าเฝ้าระวัง: แผนที่ทั้งประเทศแสดงจุดตามความเสี่ยง"""
+    now = timezone.now()
+
+    provinces = Province.objects.all().order_by('name_th')
+
+    # Get latest observed rain
+    observed_rains = {}
+    for obs in ObservedRain.objects.filter(timestamp__gte=now - timedelta(hours=24)).order_by('province_id', '-timestamp'):
+        if obs.province_id not in observed_rains:
+            observed_rains[obs.province_id] = obs.rain_24h_mm
+
+    # Build province data with predictions
+    province_markers = []
+    risk_counts = {level: 0 for level in ['SAFE', 'LOW', 'MODERATE', 'HIGH', 'CRITICAL']}
+
+    for prov in provinces:
+        pred = FloodPrediction.objects.filter(province=prov).order_by('-predicted_at').first()
+        if pred:
+            risk_counts[pred.risk_level] += 1
+            province_markers.append({
+                'id': prov.id,
+                'name_th': prov.name_th,
+                'name_en': prov.name_en,
+                'lat': prov.latitude,
+                'lng': prov.longitude,
+                'region': prov.region,
+                'risk_level': pred.risk_level,
+                'risk_display': pred.get_risk_level_display(),
+                'flood_probability': pred.flood_probability,
+                'expected_rain_mm': float(pred.expected_rain_mm),
+                'dam_fill_pct': float(pred.dam_fill_pct) if pred.dam_fill_pct else 0,
+                'color': RISK_COLORS.get(pred.risk_level, '#6b7280'),
+                'observed_rain': float(observed_rains.get(prov.id, 0.0)),
+            })
+
+    # Dam data for sidebar
+    recent_dams = DamData.objects.filter(
+        timestamp__gte=now - timedelta(hours=24)
+    ).order_by('-storage_percent', '-timestamp')
+
+    seen_dams = set()
+    top_dams = []
+    for d in recent_dams:
+        if d.rid_code not in seen_dams:
+            seen_dams.add(d.rid_code)
+            top_dams.append(d)
+    top_dams = top_dams[:10]
+
+    # Active alerts
+    active_alerts = Alert.objects.filter(
+        is_active=True,
+        created_at__gte=now - timedelta(hours=24)
+    ).select_related('province').order_by('-created_at')[:10]
+
+    context = {
+        'province_markers_json': json.dumps(province_markers, ensure_ascii=False),
+        'province_markers': province_markers,
+        'risk_counts': risk_counts,
+        'total_provinces': provinces.count(),
+        'top_dams': top_dams,
+        'active_alerts': active_alerts,
+        'now': now,
+    }
+    return render(request, 'flood_alert/monitoring_map.html', context)
+
+
+def satellite_map(request):
+    """หน้าข้อมูลดาวเทียมและเรดาร์ (GISTDA / RainViewer)"""
+    from django.conf import settings as django_settings
+    gistda_key = getattr(django_settings, 'GISTDA_API_KEY', '')
+    return render(request, 'flood_alert/satellite_map.html', {'gistda_key': gistda_key})
+
+

@@ -1,0 +1,609 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เฝ้าระวังทั่วประเทศ - FloodGuard Thailand</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'flood_alert/css/main.css' %}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <style>
+        .monitoring-layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 0;
+            height: calc(100vh - 64px);
+        }
+        @media (max-width: 1024px) {
+            .monitoring-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+
+        /* Map */
+        #monitoring-map {
+            width: 100%;
+            height: 100%;
+            min-height: 500px;
+        }
+        .leaflet-container { background: #0a0f1e; }
+
+        /* Legend overlay */
+        .map-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 16px;
+            z-index: 1000;
+            background: rgba(2, 8, 23, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 18px;
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.15);
+        }
+
+        /* Stats strip */
+        .stats-strip {
+            display: flex;
+            gap: 2px;
+            padding: 0;
+            background: rgba(2, 8, 23, 0.6);
+            border-bottom: 1px solid var(--border);
+        }
+        .strip-item {
+            flex: 1;
+            text-align: center;
+            padding: 10px 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+        }
+        .strip-item:hover, .strip-item.active {
+            background: rgba(255,255,255,0.05);
+        }
+        .strip-item.active { border-bottom-color: var(--accent); }
+        .strip-num {
+            font-size: 22px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .strip-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: rgba(2, 8, 23, 0.5);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sidebar-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .sidebar-body::-webkit-scrollbar { width: 4px; }
+        .sidebar-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        /* Province list items */
+        .prov-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid transparent;
+        }
+        .prov-item:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: var(--border);
+        }
+        .prov-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            box-shadow: 0 0 8px currentColor;
+        }
+        .prov-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .prov-name {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .prov-detail {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            gap: 8px;
+            margin-top: 2px;
+        }
+        .prov-prob {
+            font-size: 14px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* Tabs */
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .sidebar-tab:hover { color: var(--text-primary); }
+        .sidebar-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Dam mini card */
+        .dam-mini {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 8px;
+            background: rgba(255,255,255,0.02);
+        }
+        .dam-mini-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .dam-mini-name {
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .dam-mini-pct {
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .dam-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .dam-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.6s ease;
+        }
+        .dam-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Alert mini */
+        .alert-mini {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border-left: 3px solid var(--critical);
+            background: rgba(239, 68, 68, 0.05);
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        .alert-mini-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .alert-mini-meta {
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        /* Popup custom */
+        .leaflet-popup-content-wrapper {
+            background: rgba(2, 8, 23, 0.95) !important;
+            backdrop-filter: blur(12px);
+            color: white !important;
+            border: 1px solid rgba(56, 189, 248, 0.3) !important;
+            border-radius: 10px !important;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+        }
+        .leaflet-popup-tip { background: rgba(2, 8, 23, 0.95) !important; }
+        .leaflet-popup-content {
+            margin: 12px 16px !important;
+            font-family: 'Noto Sans Thai', sans-serif !important;
+        }
+        .popup-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .popup-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 12px;
+            font-size: 12px;
+        }
+        .popup-label { color: rgba(255,255,255,0.5); }
+        .popup-val { font-weight: 600; text-align: right; }
+        .popup-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+        .popup-link {
+            display: block;
+            text-align: center;
+            margin-top: 10px;
+            padding: 6px;
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 6px;
+            color: #38bdf8;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .popup-link:hover {
+            background: rgba(56, 189, 248, 0.25);
+        }
+
+        /* Search */
+        .search-box {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.05);
+            color: white;
+            font-size: 13px;
+            outline: none;
+            font-family: 'Noto Sans Thai', sans-serif;
+        }
+        .search-input::placeholder { color: var(--text-muted); }
+        .search-input:focus { border-color: var(--accent); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <a href="{% url 'flood_alert:dashboard' %}" class="logo">
+                <span class="logo-icon">🌊</span>
+                <div>
+                    <span class="logo-text">FloodGuard</span>
+                    <span class="logo-sub">Thailand</span>
+                </div>
+            </a>
+            <nav class="nav">
+                <a href="{% url 'flood_alert:dashboard' %}" class="nav-link">แผงควบคุม</a>
+                <a href="{% url 'flood_alert:monitoring_map' %}" class="nav-link active">เฝ้าระวัง</a>
+                <a href="{% url 'flood_alert:satellite_map' %}" class="nav-link">ดาวเทียม/เรดาร์</a>
+                <a href="{% url 'flood_alert:bkk_roads' %}" class="nav-link">ถนนน้ำท่วม กทม.</a>
+                <a href="{% url 'flood_alert:system_status' %}" class="nav-link">สถานะระบบ</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Stats Strip -->
+    <div class="stats-strip">
+        <div class="strip-item active" data-filter="all">
+            <div class="strip-num" style="color: var(--accent);">{{ total_provinces }}</div>
+            <div class="strip-label">ทั้งหมด</div>
+        </div>
+        <div class="strip-item" data-filter="SAFE">
+            <div class="strip-num" style="color: #22c55e;">{{ risk_counts.SAFE }}</div>
+            <div class="strip-label">ปลอดภัย</div>
+        </div>
+        <div class="strip-item" data-filter="LOW">
+            <div class="strip-num" style="color: #eab308;">{{ risk_counts.LOW }}</div>
+            <div class="strip-label">เฝ้าระวัง</div>
+        </div>
+        <div class="strip-item" data-filter="MODERATE">
+            <div class="strip-num" style="color: #f97316;">{{ risk_counts.MODERATE }}</div>
+            <div class="strip-label">ปานกลาง</div>
+        </div>
+        <div class="strip-item" data-filter="HIGH">
+            <div class="strip-num" style="color: #ef4444;">{{ risk_counts.HIGH }}</div>
+            <div class="strip-label">เสี่ยงสูง</div>
+        </div>
+        <div class="strip-item" data-filter="CRITICAL">
+            <div class="strip-num" style="color: #7c3aed;">{{ risk_counts.CRITICAL }}</div>
+            <div class="strip-label">วิกฤต</div>
+        </div>
+    </div>
+
+    <div class="monitoring-layout">
+        <!-- Map -->
+        <div style="position: relative;">
+            <div id="monitoring-map"></div>
+            <div class="map-legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#22c55e;"></div> ปลอดภัย</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#eab308;"></div> เฝ้าระวัง</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#f97316;"></div> ปานกลาง</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div> เสี่ยงสูง</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#7c3aed;"></div> วิกฤต</div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-tabs">
+                <div class="sidebar-tab active" data-tab="provinces">📍 จังหวัด</div>
+                <div class="sidebar-tab" data-tab="dams">🏞️ เขื่อน</div>
+                <div class="sidebar-tab" data-tab="alerts">🚨 แจ้งเตือน</div>
+            </div>
+
+            <!-- Search -->
+            <div class="search-box">
+                <input type="text" class="search-input" id="province-search" placeholder="🔍 ค้นหาจังหวัด...">
+            </div>
+
+            <div class="sidebar-body">
+                <!-- Tab: Provinces -->
+                <div class="tab-content active" id="tab-provinces">
+                    {% for p in province_markers %}
+                    <a href="{% url 'flood_alert:province_detail' p.id %}" class="prov-item" data-risk="{{ p.risk_level }}" data-name="{{ p.name_th }}" data-lat="{{ p.lat }}" data-lng="{{ p.lng }}">
+                        <div class="prov-dot" style="background: {{ p.color }}; color: {{ p.color }};"></div>
+                        <div class="prov-info">
+                            <div class="prov-name">{{ p.name_th }}</div>
+                            <div class="prov-detail">
+                                <span>🌧️ {{ p.expected_rain_mm|floatformat:1 }} มม.</span>
+                                {% if p.observed_rain > 0 %}
+                                <span>💧 จริง {{ p.observed_rain|floatformat:1 }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="prov-prob" style="color: {{ p.color }};">{{ p.flood_probability }}%</div>
+                    </a>
+                    {% empty %}
+                    <div style="text-align:center; padding: 40px; color: var(--text-muted);">
+                        <div style="font-size: 32px; margin-bottom: 8px;">📊</div>
+                        ยังไม่มีข้อมูลทำนาย
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Tab: Dams -->
+                <div class="tab-content" id="tab-dams">
+                    {% for dam in top_dams %}
+                    <div class="dam-mini">
+                        <div class="dam-mini-header">
+                            <div class="dam-mini-name">{{ dam.dam_name }}</div>
+                            <div class="dam-mini-pct" style="color: {% if dam.storage_percent >= 80 %}#ef4444{% elif dam.storage_percent >= 60 %}#f97316{% else %}#22c55e{% endif %}">
+                                {{ dam.storage_percent|floatformat:1 }}%
+                            </div>
+                        </div>
+                        <div class="dam-bar">
+                            <div class="dam-bar-fill" style="width: {% if dam.storage_percent > 100 %}100{% else %}{{ dam.storage_percent|floatformat:0 }}{% endif %}%; background: {% if dam.storage_percent >= 80 %}#ef4444{% elif dam.storage_percent >= 60 %}#f97316{% else %}#22c55e{% endif %};"></div>
+                        </div>
+                        <div class="dam-meta">
+                            <span>ปริมาตร: {{ dam.volume_mcm|floatformat:0 }} ล้าน ม³</span>
+                            <span>ไหลเข้า: {{ dam.inflow_cms|floatformat:1 }} | ระบาย: {{ dam.outflow_cms|floatformat:1 }}</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div style="text-align:center; padding: 40px; color: var(--text-muted);">
+                        <div style="font-size: 32px; margin-bottom: 8px;">🏞️</div>
+                        ยังไม่มีข้อมูลเขื่อน
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Tab: Alerts -->
+                <div class="tab-content" id="tab-alerts">
+                    {% for alert in active_alerts %}
+                    <div class="alert-mini">
+                        <div class="alert-mini-title">{{ alert.title }}</div>
+                        <div class="alert-mini-meta">📍 {{ alert.province.name_th }} · {{ alert.created_at|timesince }} ที่แล้ว</div>
+                    </div>
+                    {% empty %}
+                    <div style="text-align:center; padding: 40px; color: var(--text-muted);">
+                        <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
+                        ไม่มีการแจ้งเตือนใน 24 ชม.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+    (function() {
+        'use strict';
+
+        var provinceData = {{ province_markers_json|safe }};
+        var markers = [];
+        var markerLayer = null;
+
+        // Risk radius mapping
+        var riskRadius = {
+            'SAFE': 6, 'LOW': 8, 'MODERATE': 10, 'HIGH': 12, 'CRITICAL': 14
+        };
+
+        // Initialize map
+        var map = L.map('monitoring-map', {
+            zoomControl: true,
+            scrollWheelZoom: true,
+        }).setView([13.0, 101.0], 6);
+
+        // Add Esri tiles
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 18,
+            attribution: '&copy; Esri'
+        }).addTo(map);
+
+        // Create markers
+        function createMarkers(filterRisk) {
+            // Remove old markers
+            if (markerLayer) {
+                map.removeLayer(markerLayer);
+            }
+            markerLayer = L.layerGroup().addTo(map);
+            markers = [];
+
+            provinceData.forEach(function(p) {
+                if (filterRisk && filterRisk !== 'all' && p.risk_level !== filterRisk) return;
+
+                var radius = riskRadius[p.risk_level] || 8;
+                var marker = L.circleMarker([p.lat, p.lng], {
+                    radius: radius,
+                    fillColor: p.color,
+                    color: 'rgba(255,255,255,0.3)',
+                    weight: 1.5,
+                    opacity: 1,
+                    fillOpacity: 0.85,
+                    className: 'risk-marker'
+                });
+
+                var popupHtml = '<div class="popup-title">' + p.name_th + '</div>' +
+                    '<div class="popup-grid">' +
+                    '  <div class="popup-label">ระดับความเสี่ยง</div><div class="popup-val">' + p.risk_display + '</div>' +
+                    '  <div class="popup-label">โอกาสน้ำท่วม</div><div class="popup-val">' + p.flood_probability + '%</div>' +
+                    '  <div class="popup-label">ฝนคาดการณ์</div><div class="popup-val">' + p.expected_rain_mm.toFixed(1) + ' มม.</div>' +
+                    '  <div class="popup-label">ฝนจริง 24ชม.</div><div class="popup-val">' + p.observed_rain.toFixed(1) + ' มม.</div>' +
+                    '  <div class="popup-label">เขื่อน</div><div class="popup-val">' + p.dam_fill_pct.toFixed(1) + '%</div>' +
+                    '  <div class="popup-label">ภูมิภาค</div><div class="popup-val">' + p.region + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:center;"><span class="popup-badge" style="background:' + p.color + '20; color:' + p.color + '; border: 1px solid ' + p.color + ';">' + p.risk_display + '</span></div>' +
+                    '<a href="/province/' + p.id + '/" class="popup-link">📊 ดูรายละเอียดจังหวัด →</a>';
+
+                marker.bindPopup(popupHtml, { maxWidth: 280 });
+
+                // Hover effect
+                marker.on('mouseover', function() {
+                    this.setStyle({ radius: radius + 4, weight: 3, color: p.color });
+                    this.openPopup();
+                });
+                marker.on('mouseout', function() {
+                    this.setStyle({ radius: radius, weight: 1.5, color: 'rgba(255,255,255,0.3)' });
+                });
+
+                marker.addTo(markerLayer);
+                markers.push({ marker: marker, data: p });
+            });
+        }
+
+        createMarkers(null);
+
+        // Stats strip filter
+        document.querySelectorAll('.strip-item').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.strip-item').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                var filter = btn.dataset.filter;
+                createMarkers(filter);
+
+                // Also filter sidebar list
+                document.querySelectorAll('.prov-item').forEach(function(item) {
+                    if (filter === 'all' || item.dataset.risk === filter) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+        });
+
+        // Sidebar tabs
+        document.querySelectorAll('.sidebar-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.sidebar-tab').forEach(function(t) { t.classList.remove('active'); });
+                document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Province search
+        document.getElementById('province-search').addEventListener('input', function() {
+            var q = this.value.trim().toLowerCase();
+            document.querySelectorAll('.prov-item').forEach(function(item) {
+                var name = (item.dataset.name || '').toLowerCase();
+                item.style.display = (!q || name.indexOf(q) >= 0) ? 'flex' : 'none';
+            });
+        });
+
+        // Click province in sidebar → fly to marker on map
+        document.querySelectorAll('.prov-item').forEach(function(item) {
+            item.addEventListener('mouseenter', function(e) {
+                var lat = parseFloat(item.dataset.lat);
+                var lng = parseFloat(item.dataset.lng);
+                if (lat && lng) {
+                    markers.forEach(function(m) {
+                        if (m.data.lat === lat && m.data.lng === lng) {
+                            var r = riskRadius[m.data.risk_level] || 8;
+                            m.marker.setStyle({ radius: r + 4, weight: 3, color: m.data.color });
+                        }
+                    });
+                }
+            });
+            item.addEventListener('mouseleave', function(e) {
+                markers.forEach(function(m) {
+                    var r = riskRadius[m.data.risk_level] || 8;
+                    m.marker.setStyle({ radius: r, weight: 1.5, color: 'rgba(255,255,255,0.3)' });
+                });
+            });
+        });
+
+    })();
+    </script>
+</body>
+</html>

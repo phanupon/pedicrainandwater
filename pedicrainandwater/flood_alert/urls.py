@@ -12,6 +12,8 @@ urlpatterns = [
     path('status/', views.system_status, name='system_status'),
     path('explore/<str:data_type>/', views.data_explorer, name='data_explorer'),
     path('bkk-roads/', views.bkk_roads, name='bkk_roads'),
+    path('monitoring/', views.monitoring_map, name='monitoring_map'),
+    path('satellite/', views.satellite_map, name='satellite_map'),
     # JSON API endpoints
     path('api/alerts/', views.api_alerts, name='api_alerts'),
     path('api/predictions/', views.api_predictions, name='api_predictions'),

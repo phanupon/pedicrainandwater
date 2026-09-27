@@ -20,7 +20,10 @@
                 </div>
             </a>
             <nav class="nav">
-                <a href="{% url 'flood_alert:dashboard' %}" class="nav-link">← แผงควบคุม</a>
+                <a href="{% url 'flood_alert:dashboard' %}" class="nav-link">แผงควบคุม</a>
+                <a href="{% url 'flood_alert:monitoring_map' %}" class="nav-link">เฝ้าระวัง</a>
+                <a href="{% url 'flood_alert:satellite_map' %}" class="nav-link">ดาวเทียม/เรดาร์</a>
+                <a href="{% url 'flood_alert:bkk_roads' %}" class="nav-link">ถนนน้ำท่วม กทม.</a>
                 <a href="{% url 'flood_alert:system_status' %}" class="nav-link active">สถานะระบบ</a>
             </nav>
         </div>
