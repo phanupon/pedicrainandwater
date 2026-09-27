@@ -31,26 +31,26 @@
 
         <!-- Stats Cards -->
         <div class="stats-grid">
-            <div class="stat-card stat-safe">
+            <a href="{% url 'flood_alert:data_explorer' 'weather' %}" class="stat-card stat-safe" style="text-decoration: none; display: flex; flex-direction: column;">
                 <div class="stat-icon">🌤️</div>
                 <div class="stat-value">{{ stats.weather }}</div>
                 <div class="stat-label">ข้อมูลพยากรณ์</div>
-            </div>
-            <div class="stat-card stat-low">
+            </a>
+            <a href="{% url 'flood_alert:data_explorer' 'dams' %}" class="stat-card stat-low" style="text-decoration: none; display: flex; flex-direction: column;">
                 <div class="stat-icon">🏞️</div>
                 <div class="stat-value">{{ stats.dams }}</div>
                 <div class="stat-label">ข้อมูลเขื่อน</div>
-            </div>
-            <div class="stat-card stat-moderate">
+            </a>
+            <a href="{% url 'flood_alert:data_explorer' 'predictions' %}" class="stat-card stat-moderate" style="text-decoration: none; display: flex; flex-direction: column;">
                 <div class="stat-icon">📊</div>
                 <div class="stat-value">{{ stats.predictions }}</div>
                 <div class="stat-label">ผลการทำนาย</div>
-            </div>
-            <div class="stat-card stat-high">
+            </a>
+            <a href="{% url 'flood_alert:data_explorer' 'alerts' %}" class="stat-card stat-high" style="text-decoration: none; display: flex; flex-direction: column;">
                 <div class="stat-icon">🔔</div>
                 <div class="stat-value">{{ stats.alerts }}</div>
                 <div class="stat-label">การแจ้งเตือน</div>
-            </div>
+            </a>
         </div>
 
         <!-- Data Sources Status -->
@@ -72,6 +72,13 @@
                     <div class="api-desc">ข้อมูลอ่างเก็บน้ำ (Public)</div>
                     <div class="api-status">✅ พร้อมใช้งาน</div>
                     <code class="api-endpoint">app.rid.go.th/reservoir/api/dam</code>
+                </div>
+                <div class="api-source-card api-active">
+                    <div class="api-logo">💧</div>
+                    <div class="api-name">สส.น. (ThaiWater)</div>
+                    <div class="api-desc">ปริมาณฝนสะสมจริง 24 ชม. (Public)</div>
+                    <div class="api-status">✅ พร้อมใช้งาน</div>
+                    <code class="api-endpoint">api-v3.thaiwater.net</code>
                 </div>
                 <div class="api-source-card {% if api_status.gistda_configured %}api-active{% else %}api-key-required{% endif %}">
                     <div class="api-logo">🛰️</div>

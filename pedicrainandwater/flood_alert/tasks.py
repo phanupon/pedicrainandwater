@@ -12,8 +12,8 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from .models import Province, WeatherData, DamData, FloodPrediction, Alert, DataFetchLog
-from .services import fetch_open_meteo_weather, fetch_rid_dam_data, fetch_tmd_weather
+from .models import Province, WeatherData, DamData, FloodPrediction, Alert, DataFetchLog, ObservedRain
+from .services import fetch_open_meteo_weather, fetch_rid_dam_data, fetch_tmd_weather, fetch_thaiwater_rain
 from .predictor import predict_flood_for_province, generate_alert_message
 
 logger = logging.getLogger('flood_alert')
@@ -109,6 +109,50 @@ def fetch_dam_data():
             duration_ms=duration_ms,
         )
         logger.error(f'Dam fetch failed: {e}')
+        return 0
+
+
+@shared_task(name='flood_alert.fetch_thaiwater_rain')
+def fetch_thaiwater_rain_task():
+    """ดึงข้อมูลฝนสะสม 24 ชม. จาก ThaiWater (ทุก 1 ชม.)"""
+    start_time = time.time()
+    try:
+        province_rain = fetch_thaiwater_rain()
+        total = 0
+        
+        for prov_name, rain_24h in province_rain.items():
+            # Try to match province name
+            try:
+                province = Province.objects.get(name_th__contains=prov_name)
+                ObservedRain.objects.create(
+                    province=province,
+                    rain_24h_mm=rain_24h
+                )
+                total += 1
+            except Province.DoesNotExist:
+                continue
+            except Province.MultipleObjectsReturned:
+                continue
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        DataFetchLog.objects.create(
+            source='thaiwater',
+            status='success' if total > 0 else 'error',
+            records_fetched=total,
+            duration_ms=duration_ms,
+        )
+        logger.info(f'ThaiWater rain fetch complete: {total} records')
+        return total
+
+    except Exception as e:
+        duration_ms = int((time.time() - start_time) * 1000)
+        DataFetchLog.objects.create(
+            source='thaiwater',
+            status='error',
+            error_message=str(e),
+            duration_ms=duration_ms,
+        )
+        logger.error(f'ThaiWater fetch failed: {e}')
         return 0
 
 

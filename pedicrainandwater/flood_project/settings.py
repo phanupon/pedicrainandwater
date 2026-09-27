@@ -119,6 +119,9 @@ GISTDA_FLOOD_API = 'https://api-gateway.gistda.or.th/v2/flood'
 # กรมชลประทาน (RID) - Public API (no key needed)
 RID_DAM_API = 'https://app.rid.go.th/reservoir/api/dam/public'
 
+# สถาบันสารสนเทศทรัพยากรน้ำ (ThaiWater) - Public API
+THAIWATER_RAIN_API = 'https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h'
+
 # Open-Meteo (Free, no key needed)
 OPEN_METEO_API = 'https://api.open-meteo.com/v1/forecast'
 

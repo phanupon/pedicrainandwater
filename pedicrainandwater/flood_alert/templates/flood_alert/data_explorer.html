@@ -1,0 +1,247 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - FloodGuard Thailand</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'flood_alert/css/main.css' %}">
+    <style>
+        .explorer-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        
+        .data-table-wrapper {
+            background: rgba(2, 8, 23, 0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .data-table th, .data-table td {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .data-table th {
+            background: rgba(255, 255, 255, 0.02);
+            font-weight: 600;
+            color: var(--text-primary);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .data-table tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        .data-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .tag-safe { background: rgba(34, 197, 94, 0.15); color: var(--safe); }
+        .tag-warning { background: rgba(245, 158, 11, 0.15); color: var(--moderate); }
+        .tag-critical { background: rgba(239, 68, 68, 0.15); color: var(--critical); }
+        .tag-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <a href="{% url 'flood_alert:dashboard' %}" class="logo">
+                <span class="logo-icon">🌊</span>
+                <div>
+                    <span class="logo-text">FloodGuard</span>
+                    <span class="logo-sub">Thailand</span>
+                </div>
+            </a>
+            <nav class="nav">
+                <a href="{% url 'flood_alert:system_status' %}" class="nav-link">← กลับไปยังสถานะระบบ</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="explorer-container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <h1 class="page-title" style="margin-bottom: 8px;">{{ title }}</h1>
+                <p style="color: var(--text-secondary);">ข้อมูลดิบล่าสุดจากฐานข้อมูล เพื่อการตรวจสอบและวิเคราะห์</p>
+            </div>
+            <div style="color: var(--text-muted); font-size: 14px;">
+                แสดงผล {{ data_list|length }} รายการล่าสุด
+            </div>
+        </div>
+
+        <div class="data-table-wrapper">
+            <div style="overflow-x: auto;">
+                <table class="data-table">
+                    {% if data_type == 'weather' %}
+                    <thead>
+                        <tr>
+                            <th>จังหวัด</th>
+                            <th>เวลาพยากรณ์</th>
+                            <th>ปริมาณฝน (มม.)</th>
+                            <th>อุณหภูมิ (°C)</th>
+                            <th>ความชื้น (%)</th>
+                            <th>เมฆปกคลุม (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data_list %}
+                        <tr>
+                            <td style="font-weight: 500; color: var(--text-primary);">{{ item.province.name_th }}</td>
+                            <td>{{ item.forecast_time|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if item.precipitation_mm > 10.0 %}
+                                    <span class="tag tag-critical">{{ item.precipitation_mm|floatformat:1 }}</span>
+                                {% elif item.precipitation_mm > 0 %}
+                                    <span class="tag tag-info">{{ item.precipitation_mm|floatformat:1 }}</span>
+                                {% else %}
+                                    <span class="tag tag-safe">0.0</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.temperature_c|default:"-" }}</td>
+                            <td>{{ item.humidity_pct|default:"-" }}</td>
+                            <td>{{ item.cloud_cover_pct|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" style="text-align: center; padding: 40px;">ไม่มีข้อมูล</td></tr>
+                        {% endfor %}
+                    </tbody>
+
+                    {% elif data_type == 'dams' %}
+                    <thead>
+                        <tr>
+                            <th>ชื่อเขื่อน/อ่างเก็บน้ำ</th>
+                            <th>อัปเดตล่าสุด</th>
+                            <th>% น้ำในอ่าง</th>
+                            <th>ปริมาตร (ล้าน ลบ.ม.)</th>
+                            <th>ไหลเข้า (ลบ.ม./วิ)</th>
+                            <th>ระบายออก (ลบ.ม./วิ)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data_list %}
+                        <tr>
+                            <td style="font-weight: 500; color: var(--text-primary);">{{ item.dam_name }}</td>
+                            <td>{{ item.timestamp|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if item.storage_percent >= 90 %}
+                                    <span class="tag tag-critical">{{ item.storage_percent|floatformat:1 }}%</span>
+                                {% elif item.storage_percent >= 75 %}
+                                    <span class="tag tag-warning">{{ item.storage_percent|floatformat:1 }}%</span>
+                                {% else %}
+                                    <span class="tag tag-safe">{{ item.storage_percent|floatformat:1 }}%</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.volume_mcm|floatformat:1 }} / {{ item.capacity_mcm|floatformat:1 }}</td>
+                            <td>{{ item.inflow_cms|default:"-" }}</td>
+                            <td>{{ item.outflow_cms|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" style="text-align: center; padding: 40px;">ไม่มีข้อมูล</td></tr>
+                        {% endfor %}
+                    </tbody>
+
+                    {% elif data_type == 'predictions' %}
+                    <thead>
+                        <tr>
+                            <th>จังหวัด</th>
+                            <th>เวลาที่ทำนาย</th>
+                            <th>ระดับความเสี่ยง</th>
+                            <th>ความน่าจะเป็น</th>
+                            <th>ฝนคาดการณ์ (มม.)</th>
+                            <th>% อ่างเก็บน้ำ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data_list %}
+                        <tr>
+                            <td style="font-weight: 500; color: var(--text-primary);">{{ item.province.name_th }}</td>
+                            <td>{{ item.predicted_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if item.risk_level == 'CRITICAL' %}
+                                    <span class="tag tag-critical">🚨 วิกฤต</span>
+                                {% elif item.risk_level == 'HIGH' %}
+                                    <span class="tag tag-critical">🔴 เสี่ยงสูง</span>
+                                {% elif item.risk_level == 'MODERATE' %}
+                                    <span class="tag tag-warning">🟠 เสี่ยงปานกลาง</span>
+                                {% elif item.risk_level == 'LOW' %}
+                                    <span class="tag tag-info">🟡 เฝ้าระวัง</span>
+                                {% else %}
+                                    <span class="tag tag-safe">🟢 ปลอดภัย</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.flood_probability|floatformat:1 }}%</td>
+                            <td>{{ item.expected_rain_mm|floatformat:1 }}</td>
+                            <td>{{ item.dam_fill_pct|floatformat:1|default:"-" }}%</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" style="text-align: center; padding: 40px;">ไม่มีข้อมูล</td></tr>
+                        {% endfor %}
+                    </tbody>
+
+                    {% elif data_type == 'alerts' %}
+                    <thead>
+                        <tr>
+                            <th>จังหวัด</th>
+                            <th>ประเภท</th>
+                            <th>เวลาที่แจ้งเตือน</th>
+                            <th>หัวข้อ</th>
+                            <th>รายละเอียด</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data_list %}
+                        <tr>
+                            <td style="font-weight: 500; color: var(--text-primary);">{{ item.province.name_th }}</td>
+                            <td>
+                                {% if 'CRITICAL' in item.alert_type %}
+                                    <span class="tag tag-critical">{{ item.get_alert_type_display }}</span>
+                                {% elif 'WARNING' in item.alert_type or 'RISK' in item.alert_type %}
+                                    <span class="tag tag-warning">{{ item.get_alert_type_display }}</span>
+                                {% else %}
+                                    <span class="tag tag-info">{{ item.get_alert_type_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="white-space: nowrap;">{{ item.created_at|date:"d/m/Y H:i" }}</td>
+                            <td style="font-weight: 500;">{{ item.title }}</td>
+                            <td style="font-size: 12px; color: var(--text-secondary); max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ item.message }}">{{ item.message }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" style="text-align: center; padding: 40px;">ไม่มีข้อมูล</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

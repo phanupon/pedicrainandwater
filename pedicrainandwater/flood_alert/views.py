@@ -10,8 +10,10 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from django.utils import timezone
 from django.db.models import Avg, Max, Count
+from django.core.cache import cache
 
-from .models import Province, WeatherData, DamData, FloodPrediction, Alert, DataFetchLog
+from .models import Province, WeatherData, DamData, FloodPrediction, Alert, DataFetchLog, ObservedRain
+from .services import fetch_thaiwater_waterlevel
 
 logger = logging.getLogger('flood_alert')
 
@@ -32,6 +34,15 @@ def dashboard(request):
     latest_preds = []
     provinces = Province.objects.all().order_by('name_th')
 
+    # Get latest observed rain for each province
+    # Group by province_id and get the max timestamp
+    latest_rain_subquery = ObservedRain.objects.values('province_id').annotate(max_time=Max('timestamp'))
+    # A simpler way since dataset is small:
+    observed_rains = {}
+    for obs in ObservedRain.objects.filter(timestamp__gte=now - timedelta(hours=24)).order_by('province_id', '-timestamp'):
+        if obs.province_id not in observed_rains:
+            observed_rains[obs.province_id] = obs.rain_24h_mm
+
     for prov in provinces:
         pred = FloodPrediction.objects.filter(province=prov).order_by('-predicted_at').first()
         if pred:
@@ -39,6 +50,7 @@ def dashboard(request):
                 'province': prov,
                 'prediction': pred,
                 'color': RISK_COLORS.get(pred.risk_level, '#6b7280'),
+                'observed_rain': observed_rains.get(prov.id, 0.0)
             })
 
     # Active alerts (last 24h)
@@ -68,11 +80,39 @@ def dashboard(request):
     # System status
     last_fetch = DataFetchLog.objects.order_by('-fetched_at').first()
 
+    # ThaiWater Water Level Data (Cached for 15 mins)
+    waterlevel_data = cache.get('thaiwater_waterlevel')
+    if not waterlevel_data:
+        waterlevel_data = fetch_thaiwater_waterlevel()
+        if waterlevel_data:
+            cache.set('thaiwater_waterlevel', waterlevel_data, 60 * 15)
+
+    wl_overflow = []
+    wl_over_capacity = []
+    wl_bkk_chao_phraya = []
+
+    if waterlevel_data:
+        # 1. สถานีที่น้ำล้นตลิ่งมากที่สุด
+        overflow_stations = [s for s in waterlevel_data if s['diff_wl_bank'] is not None and s['diff_wl_bank'] > 0]
+        wl_overflow = sorted(overflow_stations, key=lambda x: x['diff_wl_bank'], reverse=True)[:5]
+
+        # 2. สถานีระดับน้ำที่เกินความจุลำน้ำสูงสุด (>100%)
+        overcap_stations = [s for s in waterlevel_data if s['storage_percent'] is not None and s['storage_percent'] > 100]
+        wl_over_capacity = sorted(overcap_stations, key=lambda x: x['storage_percent'], reverse=True)[:5]
+
+        # 3. สถานีในกรุงเทพฯ และลุ่มเจ้าพระยาตอนล่าง
+        bkk_cp_stations = [s for s in waterlevel_data if s['province'] == 'กรุงเทพมหานคร' or 'เจ้าพระยา' in s['basin']]
+        # Sort by situation level or diff_wl_bank
+        wl_bkk_chao_phraya = sorted(bkk_cp_stations, key=lambda x: (x['situation_level'] or 0), reverse=True)[:5]
+
     context = {
         'latest_preds': latest_preds,
         'active_alerts': active_alerts,
         'risk_counts': risk_counts,
         'critical_dams': critical_dams,
+        'wl_overflow': wl_overflow,
+        'wl_over_capacity': wl_over_capacity,
+        'wl_bkk_chao_phraya': wl_bkk_chao_phraya,
         'total_provinces': provinces.count(),
         'last_fetch': last_fetch,
         'now': now,
@@ -240,3 +280,88 @@ def system_status(request):
         'api_status': api_status,
     }
     return render(request, 'flood_alert/system_status.html', context)
+
+
+def data_explorer(request, data_type):
+    """
+    หน้าแสดงข้อมูลดิบ (Explorer) สำหรับกดดูจาก stat cards
+    data_type: 'weather', 'dams', 'predictions', 'alerts'
+    """
+    context = {'data_type': data_type, 'title': ''}
+    
+    if data_type == 'weather':
+        context['title'] = 'ข้อมูลพยากรณ์อากาศล่าสุด'
+        # Top 100 recent forecasts
+        data = WeatherData.objects.select_related('province').order_by('-forecast_time')[:100]
+        context['data_list'] = data
+        
+    elif data_type == 'dams':
+        context['title'] = 'ข้อมูลเขื่อนและอ่างเก็บน้ำ'
+        # Latest dams
+        data = DamData.objects.order_by('-timestamp')[:50]
+        context['data_list'] = data
+        
+    elif data_type == 'predictions':
+        context['title'] = 'ผลการทำนายน้ำท่วมล่าสุด'
+        data = FloodPrediction.objects.select_related('province').order_by('-predicted_at')[:100]
+        context['data_list'] = data
+        
+    elif data_type == 'alerts':
+        context['title'] = 'ประวัติการแจ้งเตือน'
+        data = Alert.objects.select_related('province').order_by('-created_at')[:100]
+        context['data_list'] = data
+        
+    else:
+        # Invalid type
+        pass
+
+    return render(request, 'flood_alert/data_explorer.html', context)
+
+def bkk_roads(request):
+    """
+    หน้าแสดงข้อมูล หลีกเลี่ยงถนนน้ำท่วม กทม.
+    """
+    # Mock data for flooded roads in Bangkok
+    flooded_roads = [
+        {
+            'id': 1,
+            'name': 'ถนนรัชดาภิเษก',
+            'district': 'จตุจักร',
+            'location_desc': 'หน้าศาลอาญา - แยกรัชโยธิน',
+            'water_level': '20-30 ซม.',
+            'status': 'รถเล็กผ่านไม่ได้',
+            'trend': 'ทรงตัว',
+            'last_update': '10 นาทีที่แล้ว',
+            'lat': 13.820,
+            'lng': 100.575
+        },
+        {
+            'id': 2,
+            'name': 'ถนนแจ้งวัฒนะ',
+            'district': 'หลักสี่',
+            'location_desc': 'หน้าศูนย์ราชการ',
+            'water_level': '15-20 ซม.',
+            'status': 'ชะลอตัว',
+            'trend': 'ลดลง',
+            'last_update': '15 นาทีที่แล้ว',
+            'lat': 13.885,
+            'lng': 100.565
+        },
+        {
+            'id': 3,
+            'name': 'ถนนวิภาวดีรังสิต',
+            'district': 'ดอนเมือง',
+            'location_desc': 'ฐานทัพอากาศ - อนุสรณ์สถาน',
+            'water_level': '10-15 ซม.',
+            'status': 'วิ่งได้เฉพาะเลนขวา',
+            'trend': 'เพิ่มขึ้น',
+            'last_update': '5 นาทีที่แล้ว',
+            'lat': 13.935,
+            'lng': 100.615
+        }
+    ]
+    
+    context = {
+        'flooded_roads': flooded_roads,
+    }
+    return render(request, 'flood_alert/bkk_roads.html', context)

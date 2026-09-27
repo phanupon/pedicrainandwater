@@ -38,6 +38,10 @@ PeriodicTask.objects.update_or_create(
     defaults={'task': 'flood_alert.fetch_dam_data', 'interval': every_3h, 'enabled': True}
 )
 PeriodicTask.objects.update_or_create(
+    name='fetch-thaiwater-rain',
+    defaults={'task': 'flood_alert.fetch_thaiwater_rain', 'interval': every_hour, 'enabled': True}
+)
+PeriodicTask.objects.update_or_create(
     name='run-predictions',
     defaults={'task': 'flood_alert.run_flood_predictions', 'interval': every_30min, 'enabled': True}
 )

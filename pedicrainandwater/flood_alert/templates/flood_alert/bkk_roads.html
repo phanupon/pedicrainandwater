@@ -1,0 +1,407 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เลี่ยงถนนน้ำท่วม กทม. - FloodGuard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'flood_alert/css/main.css' %}">
+    <style>
+        .page-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .road-dashboard {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 24px;
+            margin-top: 24px;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .road-dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Map Section */
+        .map-section {
+            background: rgba(2, 8, 23, 0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            height: calc(100vh - 160px);
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-container {
+            flex: 1;
+            border-radius: 8px;
+            background: #0f172a;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(2, 8, 23, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            z-index: 10;
+        }
+        
+        .map-mock-bg {
+            position: absolute;
+            inset: 0;
+            background-image: radial-gradient(circle at center, rgba(56, 189, 248, 0.1) 0%, transparent 70%), 
+                              linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px), 
+                              linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            opacity: 0.5;
+        }
+
+        /* Road Cards */
+        .roads-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .road-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .road-card:hover {
+            transform: translateX(-4px);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(239, 68, 68, 0.3);
+            box-shadow: -4px 4px 15px rgba(239, 68, 68, 0.1);
+        }
+
+        .road-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--critical);
+            border-radius: 4px 0 0 4px;
+        }
+
+        .road-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .road-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .road-district {
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: rgba(255,255,255,0.05);
+            padding: 2px 8px;
+            border-radius: 100px;
+        }
+
+        .road-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .road-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-box-title {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .stat-box-val {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .text-red { color: var(--critical); }
+        .text-orange { color: var(--moderate); }
+        .text-blue { color: var(--accent); }
+
+        .road-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 8px;
+        }
+        
+        .pulse-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--critical);
+            border-radius: 50%;
+            margin-right: 6px;
+            box-shadow: 0 0 8px var(--critical);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        
+        .map-marker {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transform: translate(-50%, -100%);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .map-marker:hover {
+            transform: translate(-50%, -100%) scale(1.1);
+            z-index: 20;
+        }
+        
+        .marker-icon {
+            font-size: 24px;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        }
+        
+        .marker-label {
+            background: rgba(2, 8, 23, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid var(--critical);
+            margin-top: -4px;
+            box-shadow: 0 2px 10px rgba(239,68,68,0.3);
+        }
+
+        /* Leaflet custom dark theme */
+        .leaflet-container {
+            background: #0f172a;
+            border-radius: 8px;
+        }
+    </style>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <a href="{% url 'flood_alert:dashboard' %}" class="logo">
+                <span class="logo-icon">🌊</span>
+                <div>
+                    <span class="logo-text">FloodGuard</span>
+                    <span class="logo-sub">Thailand</span>
+                </div>
+            </a>
+            <nav class="nav">
+                <a href="{% url 'flood_alert:dashboard' %}" class="nav-link">แผงควบคุม</a>
+                <a href="{% url 'flood_alert:bkk_roads' %}" class="nav-link active">เลี่ยงถนนน้ำท่วม กทม.</a>
+                <a href="{% url 'flood_alert:system_status' %}" class="nav-link">สถานะระบบ</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page-container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <h1 class="page-title" style="margin-bottom: 8px;">
+                    <span class="pulse-dot"></span> 
+                    รายงานเส้นทางน้ำท่วมขัง กทม. (Live)
+                </h1>
+                <p style="color: var(--text-secondary);">หลีกเลี่ยงเส้นทางที่มีน้ำท่วมขังสูง รถเล็กไม่สามารถผ่านได้</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);">
+                <span style="color: var(--critical); font-weight: bold; font-size: 18px;">{{ flooded_roads|length }}</span> 
+                <span style="color: var(--text-muted); font-size: 13px;">จุดเฝ้าระวังสูงสุด</span>
+            </div>
+        </div>
+
+        <div class="road-dashboard">
+            <!-- Left: Map -->
+            <div class="map-section">
+                <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                    <span>🗺️</span> แผนที่จุดเสี่ยงน้ำท่วมถนน
+                </h3>
+                <div class="map-container" id="map" style="width: 100%; height: 100%; min-height: 400px; z-index: 1;">
+                    <!-- Map will be rendered here by Leaflet -->
+                    <div class="map-overlay" style="z-index: 1000;">
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">สัญลักษณ์ความรุนแรง</div>
+                        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px;">
+                            <span>🔴</span> รถเล็กผ่านไม่ได้ (>20ซม.)
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                            <span>🟠</span> ชะลอตัว (10-20ซม.)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: List of Roads -->
+            <div class="roads-sidebar">
+                <h3 style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                    <span>📍 รายการถนนน้ำท่วมขัง</span>
+                    <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">เรียงตามความรุนแรง</span>
+                </h3>
+                
+                <div class="roads-list">
+                    {% for road in flooded_roads %}
+                    <div class="road-card">
+                        <div class="road-header">
+                            <div class="road-name">{{ road.name }}</div>
+                            <div class="road-district">{{ road.district }}</div>
+                        </div>
+                        <div class="road-desc">{{ road.location_desc }}</div>
+                        
+                        <div class="road-stats">
+                            <div class="stat-box">
+                                <div class="stat-box-title">ระดับน้ำเฉลี่ย</div>
+                                <div class="stat-box-val text-red">{{ road.water_level }}</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-box-title">สภาพการจราจร</div>
+                                <div class="stat-box-val {% if 'ผ่านไม่ได้' in road.status %}text-red{% else %}text-orange{% endif %}">
+                                    {{ road.status }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="road-footer">
+                            <span>แนวโน้ม: 
+                                <strong class="{% if road.trend == 'เพิ่มขึ้น' %}text-red{% elif road.trend == 'ลดลง' %}text-blue{% else %}text-orange{% endif %}">
+                                    {{ road.trend }}
+                                </strong>
+                            </span>
+                            <span>อัปเดต: {{ road.last_update }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize map centered on Bangkok
+            var map = L.map('map').setView([13.7563, 100.5018], 11);
+            
+            // Add Esri World Street Map tiles (free, no API key needed)
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: '&copy; Esri, OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Custom markers HTML
+            var redMarker = L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="map-marker" style="position:relative; transform:none;"><div class="marker-icon">🔴</div></div>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+
+            var orangeMarker = L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="map-marker" style="position:relative; transform:none;"><div class="marker-icon">🟠</div></div>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+
+            // Add mock markers (Approximate coordinates)
+            L.marker([13.8140, 100.5752], {icon: redMarker}).addTo(map).bindPopup('<b>รัชดาภิเษก</b><br>ผ่านไม่ได้ (>20ซม.)');
+            L.marker([13.8967, 100.5592], {icon: orangeMarker}).addTo(map).bindPopup('<b>แจ้งวัฒนะ</b><br>ชะลอตัว (10-20ซม.)');
+            L.marker([13.8291, 100.5594], {icon: orangeMarker}).addTo(map).bindPopup('<b>วิภาวดีรังสิต</b><br>ชะลอตัว (10-20ซม.)');
+
+            // Load GeoJSON for Bangkok subdistricts
+            fetch("{% static 'flood_alert/geojson/Bangkok-subdistricts.geojson' %}")
+                .then(response => response.json())
+                .then(data => {
+                    L.geoJSON(data, {
+                        style: function (feature) {
+                            return {
+                                color: "#38bdf8", // outline color
+                                weight: 1,
+                                opacity: 0.3,
+                                fillColor: "#0284c7",
+                                fillOpacity: 0.05
+                            };
+                        },
+                        onEachFeature: function (feature, layer) {
+                            if (feature.properties && feature.properties.SNAME) {
+                                layer.bindTooltip(feature.properties.DNAME + ' / ' + feature.properties.SNAME, {
+                                    sticky: true,
+                                    className: 'custom-tooltip'
+                                });
+                            }
+                        }
+                    }).addTo(map);
+                })
+                .catch(error => console.error('Error loading GeoJSON:', error));
+        });
+    </script>
+    <style>
+        .custom-tooltip {
+            background: rgba(2, 8, 23, 0.9);
+            color: white;
+            border: 1px solid #38bdf8;
+            border-radius: 4px;
+            font-family: 'Noto Sans Thai', sans-serif;
+        }
+    </style>
+</body>
+</html>

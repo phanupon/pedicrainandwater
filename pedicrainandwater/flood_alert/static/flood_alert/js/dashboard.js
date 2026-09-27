@@ -203,6 +203,40 @@
         });
     }
 
+    /* ===== Risk Filter (from Stats Cards) ===== */
+    function initRiskFilter() {
+        const statCards = document.querySelectorAll('.stats-grid .stat-card');
+        const cards = document.querySelectorAll('#provinces-grid .province-card');
+
+        statCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const riskLevel = card.dataset.risk;
+                if (!riskLevel) return;
+
+                // Reset region filter
+                const filterBtns = document.querySelectorAll('#region-filter .filter-btn');
+                filterBtns.forEach(b => b.classList.remove('active'));
+                const allBtn = document.querySelector('#region-filter .filter-btn[data-region="all"]');
+                if (allBtn) allBtn.classList.add('active');
+
+                // Filter cards by risk
+                cards.forEach(c => {
+                    if (riskLevel === 'all' || c.classList.contains(`province-${riskLevel}`)) {
+                        c.style.display = 'block';
+                    } else {
+                        c.style.display = 'none';
+                    }
+                });
+
+                // Scroll to provinces grid
+                const gridSection = document.querySelector('.panel-provinces');
+                if (gridSection) {
+                    gridSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    }
+
     /* ===== Auto-refresh data every 5 minutes ===== */
     function initAutoRefresh() {
         setInterval(() => {
@@ -230,6 +264,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         connectWebSocket();
         initRegionFilter();
+        initRiskFilter();
         initAutoRefresh();
 
         // Request notification permission on first load

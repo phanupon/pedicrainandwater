@@ -220,9 +220,12 @@ body {
 }
 
 .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
 }
+
 
 .stat-icon { font-size: 28px; margin-bottom: 8px; }
 .stat-value {
@@ -430,6 +433,39 @@ body {
     font-size: 11px;
     color: var(--text-secondary);
 }
+
+/* ===== Card Grid for Water/Dams ===== */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    padding: 16px;
+}
+
+.card-box {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+.card-box:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.water-section-title {
+    padding: 12px 16px 0;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.text-critical { color: var(--critical); }
+.text-warning { color: var(--moderate); }
+.text-safe { color: var(--safe); }
+.text-info { color: #60a5fa; }
 
 /* ===== Province Cards ===== */
 .filter-btns {

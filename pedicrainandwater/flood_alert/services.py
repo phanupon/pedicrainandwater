@@ -64,30 +64,30 @@ def fetch_open_meteo_weather(province):
 
 def fetch_rid_dam_data():
     """
-    ดึงข้อมูลอ่างเก็บน้ำจากกรมชลประทาน (Public API ไม่ต้อง key)
+    ดึงข้อมูลอ่างเก็บน้ำจาก ThaiWater (35 เขื่อนขนาดใหญ่)
     Returns list of dam data dicts.
     """
-    data = _get(settings.RID_DAM_API)
-
-    # API returns: {"data": [{"region": "...", "dam": [...]}, ...]}
-    regions = data.get('data', [])
-    if not isinstance(regions, list):
-        regions = []
-
-    results = []
-    for region_data in regions:
-        dams_list = region_data.get('dam', [])
-        for dam in dams_list:
+    try:
+        url = 'https://api-v3.thaiwater.net/api/v1/thaiwater30/public/thailand_main'
+        data = _get(url)
+        dams = data.get('dam', {}).get('data', {}).get('data', [])
+        
+        results = []
+        for d in dams:
+            dam_info = d.get('dam', {})
             results.append({
-                'rid_code': str(dam.get('id', '')),
-                'dam_name': dam.get('name', ''),
-                'capacity_mcm': _to_float(dam.get('capacity')),
-                'volume_mcm': _to_float(dam.get('volume')),
-                'storage_percent': _to_float(dam.get('percent_storage')),
-                'inflow_cms': _to_float(dam.get('inflow')),
-                'outflow_cms': _to_float(dam.get('outflow')),
+                'rid_code': str(dam_info.get('id', '')),
+                'dam_name': dam_info.get('dam_name', {}).get('th', ''),
+                'capacity_mcm': _to_float(dam_info.get('normal_storage')),
+                'volume_mcm': _to_float(d.get('dam_storage')),
+                'storage_percent': _to_float(d.get('dam_storage_percent')),
+                'inflow_cms': _to_float(d.get('dam_inflow')),
+                'outflow_cms': _to_float(d.get('dam_released')),
             })
-    return results
+        return results
+    except Exception as e:
+        logger.warning(f'ThaiWater dam fetch failed: {e}')
+        return []
 
 
 def fetch_tmd_weather(province):
@@ -207,3 +207,77 @@ def _parse_tmd_nwp_response(data: dict) -> list:
 
     logger.debug(f'TMD NWP parsed {len(results)} hourly records')
     return results
+
+def fetch_thaiwater_rain():
+    """
+    ดึงข้อมูลฝนสะสม 24 ชม. ล่าสุดจากสถานี ThaiWater ทั่วประเทศ
+    จัดกลุ่มโดยหาค่าเฉลี่ยฝนหรือค่าสูงสุดของแต่ละจังหวัด
+    Returns a dict mapping province_name_th to max rain_24h_mm
+    """
+    try:
+        data = _get(settings.THAIWATER_RAIN_API)
+        stations = data.get('data', [])
+        
+        # Aggregate max rain per province
+        province_rain = {}
+        for st in stations:
+            # API structure: st['geocode']['province_name']['th']
+            geocode = st.get('geocode', {})
+            province_name = geocode.get('province_name', {}).get('th')
+            rain_24h = _to_float(st.get('rain_24h'))
+            
+            if province_name and rain_24h is not None:
+                # Remove "จังหวัด" if present in the name to match our DB
+                province_name = province_name.replace('จังหวัด', '').strip()
+                
+                # Keep max rain for the province
+                if province_name not in province_rain or rain_24h > province_rain[province_name]:
+                    province_rain[province_name] = rain_24h
+                    
+        return province_rain
+    except Exception as e:
+        logger.warning(f'ThaiWater fetch failed: {e}')
+        return {}
+
+
+def fetch_thaiwater_waterlevel():
+    """
+    ดึงข้อมูลระดับน้ำจากสถานีโทรมาตร (ThaiWater)
+    Returns list of dicts with station water level data
+    """
+    try:
+        url = 'https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_load'
+        data = _get(url)
+        stations = data.get('waterlevel_data', {}).get('data', [])
+        
+        results = []
+        for st in stations:
+            station_info = st.get('station', {})
+            geocode = st.get('geocode', {})
+            basin = st.get('basin', {})
+            
+            diff_wl = _to_float(st.get('diff_wl_bank'))
+            is_overflow = st.get('diff_wl_bank_text') == 'ล้นตลิ่ง (ม.)'
+            if is_overflow and diff_wl is not None:
+                # If overflow, it means it's above the bank
+                pass
+            elif diff_wl is not None:
+                # If not overflow, usually means it's below bank (negative or just positive distance to bank)
+                # API usually gives positive number for distance below bank too, but text says 'ต่ำกว่าตลิ่ง (ม.)'
+                if 'ต่ำกว่า' in (st.get('diff_wl_bank_text') or ''):
+                    diff_wl = -diff_wl
+            
+            results.append({
+                'id': st.get('id'),
+                'station_name': station_info.get('tele_station_name', {}).get('th', ''),
+                'province': geocode.get('province_name', {}).get('th', ''),
+                'basin': basin.get('basin_name', {}).get('th', ''),
+                'waterlevel_msl': _to_float(st.get('waterlevel_msl')),
+                'storage_percent': _to_float(st.get('storage_percent')),
+                'diff_wl_bank': diff_wl,
+                'situation_level': st.get('situation_level'),
+            })
+        return results
+    except Exception as e:
+        logger.warning(f'ThaiWater waterlevel fetch failed: {e}')
+        return []

@@ -27,6 +27,7 @@
             </div>
             <nav class="nav">
                 <a href="{% url 'flood_alert:dashboard' %}" class="nav-link active">แผงควบคุม</a>
+                <a href="{% url 'flood_alert:bkk_roads' %}" class="nav-link">เลี่ยงถนนน้ำท่วม กทม.</a>
                 <a href="{% url 'flood_alert:system_status' %}" class="nav-link">สถานะระบบ</a>
                 <a href="/admin/" class="nav-link">Admin</a>
             </nav>
@@ -40,32 +41,32 @@
     <main class="main">
         <!-- Hero Stats -->
         <section class="stats-grid">
-            <div class="stat-card stat-safe">
+            <div class="stat-card stat-safe" data-risk="safe" style="cursor: pointer;" title="คลิกเพื่อกรองจังหวัดที่ปลอดภัย">
                 <div class="stat-icon">🟢</div>
                 <div class="stat-value">{{ risk_counts.SAFE }}</div>
                 <div class="stat-label">ปลอดภัย</div>
             </div>
-            <div class="stat-card stat-low">
+            <div class="stat-card stat-low" data-risk="low" style="cursor: pointer;" title="คลิกเพื่อกรองจังหวัดที่เฝ้าระวัง">
                 <div class="stat-icon">🟡</div>
                 <div class="stat-value">{{ risk_counts.LOW }}</div>
                 <div class="stat-label">เฝ้าระวัง</div>
             </div>
-            <div class="stat-card stat-moderate">
+            <div class="stat-card stat-moderate" data-risk="moderate" style="cursor: pointer;" title="คลิกเพื่อกรองจังหวัดที่เสี่ยงปานกลาง">
                 <div class="stat-icon">🟠</div>
                 <div class="stat-value">{{ risk_counts.MODERATE }}</div>
                 <div class="stat-label">เสี่ยงปานกลาง</div>
             </div>
-            <div class="stat-card stat-high">
+            <div class="stat-card stat-high" data-risk="high" style="cursor: pointer;" title="คลิกเพื่อกรองจังหวัดที่เสี่ยงสูง">
                 <div class="stat-icon">🔴</div>
                 <div class="stat-value">{{ risk_counts.HIGH }}</div>
                 <div class="stat-label">เสี่ยงสูง</div>
             </div>
-            <div class="stat-card stat-critical">
+            <div class="stat-card stat-critical" data-risk="critical" style="cursor: pointer;" title="คลิกเพื่อกรองจังหวัดที่วิกฤต">
                 <div class="stat-icon">🚨</div>
                 <div class="stat-value">{{ risk_counts.CRITICAL }}</div>
                 <div class="stat-label">วิกฤต</div>
             </div>
-            <div class="stat-card stat-total">
+            <div class="stat-card stat-total" data-risk="all" style="cursor: pointer;" title="คลิกเพื่อดูจังหวัดทั้งหมด">
                 <div class="stat-icon">🗺️</div>
                 <div class="stat-value">{{ total_provinces }}</div>
                 <div class="stat-label">จังหวัดทั้งหมด</div>
@@ -109,40 +110,6 @@
                         {% endif %}
                     </div>
                 </section>
-
-                <!-- Dams Status Panel -->
-                <section class="panel panel-dams">
-                    <div class="panel-header">
-                        <h2 class="panel-title">
-                            <span>🏞️</span> อ่างเก็บน้ำเฝ้าระวัง
-                        </h2>
-                    </div>
-                    <div class="dams-list">
-                        {% for dam in critical_dams %}
-                        <div class="dam-item">
-                            <div class="dam-header">
-                                <div class="dam-name">{{ dam.dam_name }}</div>
-                                <div class="dam-percent {% if dam.storage_percent >= 90 %}dam-critical{% elif dam.storage_percent >= 75 %}dam-warning{% else %}dam-safe{% endif %}">
-                                    {{ dam.storage_percent|floatformat:1 }}%
-                                </div>
-                            </div>
-                            <div class="dam-progress">
-                                <div class="dam-progress-bar {% if dam.storage_percent >= 90 %}bg-critical{% elif dam.storage_percent >= 75 %}bg-warning{% else %}bg-safe{% endif %}" style="width: {{ dam.storage_percent }}%;"></div>
-                            </div>
-                            <div class="dam-details">
-                                <span>ปริมาตร: {{ dam.volume_mcm|floatformat:1 }} ลบ.ม.</span>
-                                <span>ไหลลง: {{ dam.inflow_cms|floatformat:1 }}</span>
-                                <span>ระบาย: {{ dam.outflow_cms|floatformat:1 }}</span>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="empty-state">
-                            <div class="empty-icon">ℹ️</div>
-                            <p>ไม่มีข้อมูลอ่างเก็บน้ำ</p>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </section>
             </div>
 
             <!-- Province Risk Map -->
@@ -168,7 +135,12 @@
                         <div class="province-risk-bar" style="background: {{ item.color }};"></div>
                         <div class="province-name">{{ item.province.name_th }}</div>
                         <div class="province-prob">{{ item.prediction.flood_probability }}%</div>
-                        <div class="province-rain">🌧️ {{ item.prediction.expected_rain_mm|floatformat:1 }} มม.</div>
+                        <div class="province-rain">
+                            <span title="คาดการณ์">🌧️ {{ item.prediction.expected_rain_mm|floatformat:1 }} มม.</span>
+                            {% if item.observed_rain > 0 %}
+                            <br><small style="color:var(--text-secondary);" title="ฝนตกจริง 24 ชม. ที่ผ่านมา">💧 จริง: {{ item.observed_rain|floatformat:1 }} มม.</small>
+                            {% endif %}
+                        </div>
                         <div class="province-risk-badge" style="background: {{ item.color }};">
                             {{ item.prediction.get_risk_level_display }}
                         </div>
@@ -184,6 +156,103 @@
             </section>
         </div>
 
+        <!-- Dams Status Grid -->
+        <section class="panel panel-dams" style="margin-top: 24px;">
+            <div class="panel-header">
+                <h2 class="panel-title">
+                    <span>🏞️</span> อ่างเก็บน้ำเฝ้าระวัง (ลบ.ม. สูงสุด)
+                </h2>
+            </div>
+            <div class="cards-grid">
+                {% for dam in critical_dams %}
+                <div class="card-box">
+                    <div class="dam-header" style="margin-bottom:0;">
+                        <div class="dam-name">{{ dam.dam_name }}</div>
+                        <div class="dam-percent {% if dam.storage_percent >= 90 %}text-critical{% elif dam.storage_percent >= 75 %}text-warning{% else %}text-safe{% endif %}">
+                            {{ dam.storage_percent|floatformat:1 }}%
+                        </div>
+                    </div>
+                    <div class="dam-progress" style="margin: 8px 0;">
+                        <div class="dam-progress-bar {% if dam.storage_percent >= 90 %}bg-critical{% elif dam.storage_percent >= 75 %}bg-warning{% else %}bg-safe{% endif %}" style="width: {{ dam.storage_percent }}%;"></div>
+                    </div>
+                    <div class="dam-details">
+                        <span>ปริมาตร: {{ dam.volume_mcm|floatformat:1 }}</span>
+                        <span>ไหลลง: {{ dam.inflow_cms|floatformat:1 }}</span>
+                        <span>ระบาย: {{ dam.outflow_cms|floatformat:1 }}</span>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    <div class="empty-icon">ℹ️</div>
+                    <p>ไม่มีข้อมูลอ่างเก็บน้ำ</p>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- Water Level Status Grid -->
+        <section class="panel panel-waterlevel" style="margin-top: 24px;">
+            <div class="panel-header">
+                <h2 class="panel-title"><span>🌊</span> สถานีระดับน้ำ (ThaiWater)</h2>
+            </div>
+            
+            {% if wl_overflow %}
+            <div class="water-section-title text-critical">🔴 ล้นตลิ่งมากที่สุด</div>
+            <div class="cards-grid">
+                {% for st in wl_overflow %}
+                <div class="card-box" style="border-color: rgba(239,68,68,0.3);">
+                    <div class="dam-header" style="margin-bottom:0;">
+                        <div class="dam-name">{{ st.station_name }} ({{ st.province }})</div>
+                        <div class="dam-percent text-critical">+{{ st.diff_wl_bank|floatformat:2 }} ม.</div>
+                    </div>
+                    <div class="dam-details" style="margin-top: 8px;">
+                        <span>ระดับน้ำ: {{ st.waterlevel_msl|floatformat:2 }} ม.รทก.</span>
+                        <span>{{ st.basin }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if wl_over_capacity %}
+            <div class="water-section-title text-warning">🟠 เกินความจุลำน้ำ</div>
+            <div class="cards-grid">
+                {% for st in wl_over_capacity %}
+                <div class="card-box" style="border-color: rgba(245,158,11,0.3);">
+                    <div class="dam-header" style="margin-bottom:0;">
+                        <div class="dam-name">{{ st.station_name }} ({{ st.province }})</div>
+                        <div class="dam-percent text-warning">{{ st.storage_percent|floatformat:1 }}%</div>
+                    </div>
+                    <div class="dam-details" style="margin-top: 8px;">
+                        <span>ระดับน้ำ: {{ st.waterlevel_msl|floatformat:2 }} ม.รทก.</span>
+                        <span>{{ st.basin }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if wl_bkk_chao_phraya %}
+            <div class="water-section-title text-info">🔵 กทม. และลุ่มเจ้าพระยา</div>
+            <div class="cards-grid">
+                {% for st in wl_bkk_chao_phraya %}
+                <div class="card-box" style="border-color: rgba(59,130,246,0.3);">
+                    <div class="dam-header" style="margin-bottom:0;">
+                        <div class="dam-name">{{ st.station_name }}</div>
+                        <div class="dam-percent {% if st.situation_level >= 4 %}text-critical{% else %}text-safe{% endif %}">
+                            {{ st.storage_percent|floatformat:1 }}%
+                        </div>
+                    </div>
+                    <div class="dam-details" style="margin-top: 8px;">
+                        <span>เทียบตลิ่ง: {% if st.diff_wl_bank > 0 %}+{% endif %}{{ st.diff_wl_bank|floatformat:2 }} ม.</span>
+                        <span>{{ st.province }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </section>
+
         <!-- System Info Bar -->
         <div class="info-bar">
             <span>📡 อัปเดตล่าสุด: <strong>{{ now|date:"d/m/Y H:i:s" }}</strong></span>
@@ -198,6 +267,6 @@
     <!-- Real-time Alert Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="{% static 'flood_alert/js/dashboard.js' %}"></script>
+    <script src="{% static 'flood_alert/js/dashboard.js' %}?v=3"></script>
 </body>
 </html>

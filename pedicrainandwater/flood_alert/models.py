@@ -81,6 +81,24 @@ class DamData(models.Model):
         return f'{self.dam_name} ({self.storage_percent:.1f}%)'
 
 
+class ObservedRain(models.Model):
+    """ข้อมูลปริมาณฝนสะสมจริงจาก ThaiWater"""
+    province = models.ForeignKey(Province, on_delete=models.CASCADE, related_name='observed_rain')
+    rain_24h_mm = models.FloatField(verbose_name='ฝนสะสม 24 ชม. (มม.)', default=0.0)
+    timestamp = models.DateTimeField(verbose_name='เวลาที่บันทึก', default=timezone.now)
+
+    class Meta:
+        verbose_name = 'ข้อมูลฝนสะสมจริง'
+        verbose_name_plural = 'ข้อมูลฝนสะสมจริง'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['province', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f'{self.province} | {self.rain_24h_mm} mm | {self.timestamp:%d/%m/%Y}'
+
+
 class FloodPrediction(models.Model):
     """ผลการทำนายน้ำท่วม"""
     RISK_LEVELS = [
@@ -154,6 +172,7 @@ class DataFetchLog(models.Model):
         ('rid_dam', 'RID อ่างเก็บน้ำ'),
         ('gistda', 'GISTDA'),
         ('tmd', 'กรมอุตุ'),
+        ('thaiwater', 'ThaiWater'),
     ]
     STATUS_CHOICES = [
         ('success', '✅ สำเร็จ'),
